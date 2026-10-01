@@ -1,0 +1,10 @@
+{
+  "name": "acceptance-testing-local",
+  "interface": {"displayName": "验收测试插件"},
+  "plugins": [{
+    "name": "acceptance-testing",
+    "source": {"source": "local", "path": "./plugins/acceptance-testing"},
+    "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"},
+    "category": "Productivity"
+  }]
+}

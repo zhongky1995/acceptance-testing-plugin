@@ -1,0 +1,4 @@
+interface:
+  display_name: "业务验收"
+  short_description: "通过接口浏览器或 computer use 验证完整任务、业务规则与异常恢复。"
+  default_prompt: "使用 $acceptance-business 验证当前方案的用户流程和最终业务结果。"

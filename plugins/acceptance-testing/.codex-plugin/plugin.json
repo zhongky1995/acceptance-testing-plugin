@@ -1,0 +1,19 @@
+{
+  "name": "acceptance-testing",
+  "version": "0.1.0",
+  "description": "面向非技术负责人的 AI 开发验收，按风险选测、复用环境、控制投入并保留证据。",
+  "author": {"name": "Zhuanz", "url": "https://github.com/zhongky1995"},
+  "homepage": "https://github.com/zhongky1995/acceptance-testing-plugin",
+  "repository": "https://github.com/zhongky1995/acceptance-testing-plugin",
+  "license": "MIT",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "验收测试",
+    "shortDescription": "按需测试，复用环境，以证据判断能否交付。",
+    "longDescription": "六个按需技能与零第三方库执行工具，覆盖规划、技术、业务、交付适用性、报告及复测。",
+    "developerName": "Zhuanz",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write", "Interactive"],
+    "defaultPrompt": ["使用验收总控检查当前项目，按目标与预算执行必要测试，并提供可检查的报告。"]
+  }
+}

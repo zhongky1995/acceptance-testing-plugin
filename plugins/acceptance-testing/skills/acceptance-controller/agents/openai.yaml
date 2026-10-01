@@ -1,0 +1,4 @@
+interface:
+  display_name: "验收总控"
+  short_description: "按本轮目标组织技术业务验收，复用环境控制投入并保留执行与复测证据。"
+  default_prompt: "使用 $acceptance-controller 验收当前项目，先读取文档和已有测试，再按目标与预算执行。"

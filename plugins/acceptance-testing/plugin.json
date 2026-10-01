@@ -1,0 +1,20 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "acceptance-testing",
+  "version": "0.1.0",
+  "description": "面向非技术负责人的 AI 开发验收：读取项目、按风险规划、复用环境执行、以证据报告与复测。",
+  "author": {"name": "Zhuanz", "url": "https://github.com/zhongky1995"},
+  "homepage": "https://github.com/zhongky1995/acceptance-testing-plugin",
+  "repository": "https://github.com/zhongky1995/acceptance-testing-plugin",
+  "license": "MIT",
+  "keywords": ["testing", "acceptance", "evidence", "delivery"],
+  "extensions": {"com.openai": {"interface": {
+    "displayName": "验收测试",
+    "shortDescription": "按需测试，复用环境，以证据判断能否交付。",
+    "longDescription": "整合测试规划、技术验证、业务验收、按需交付评估与报告。支持本地迭代、第三方接手和目标环境交付，控制时间和外部费用，保存首次失败与复测证据。",
+    "developerName": "Zhuanz",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write", "Interactive"],
+    "defaultPrompt": ["验收这个项目，先读取产品与架构材料，复用已有环境，按本轮目标规划并执行测试。"]
+  }}}
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "验收报告"
+  short_description: "基于实际结果汇总验收结论、业务影响、未验证范围和修复后复测要求。"
+  default_prompt: "使用 $acceptance-report 从当前测试档案生成负责人可读的验收报告。"

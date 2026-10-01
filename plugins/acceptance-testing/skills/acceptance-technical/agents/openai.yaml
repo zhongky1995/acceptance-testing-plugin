@@ -1,0 +1,4 @@
+interface:
+  display_name: "技术验证"
+  short_description: "复用项目工具执行技术测试，保存结构化结果并定位失败与环境缺口。"
+  default_prompt: "使用 $acceptance-technical 按当前方案执行技术验证并保存原始证据。"

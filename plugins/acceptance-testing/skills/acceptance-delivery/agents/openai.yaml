@@ -1,0 +1,4 @@
+interface:
+  display_name: "交付评估"
+  short_description: "按需检查环境部署复制、依赖维护负担和成本，形成适用性结论及依据。"
+  default_prompt: "使用 $acceptance-delivery 按本次交付目标评估部署复制与成本负担。"
