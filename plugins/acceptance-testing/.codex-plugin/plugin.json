@@ -1,6 +1,6 @@
 {
   "name": "acceptance-testing",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "面向非技术负责人的 AI 开发验收，按风险选测、复用环境、控制投入并保留证据。",
   "author": {"name": "Zhuanz", "url": "https://github.com/zhongky1995"},
   "homepage": "https://github.com/zhongky1995/acceptance-testing-plugin",
