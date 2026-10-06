@@ -4,7 +4,7 @@
 
 Evidence-based acceptance testing for AI-built products: risk-based planning, existing-environment reuse, technical and business checks, budget controls, and verifiable reports.
 
-当前版本：**0.1.0**。本地执行工具依赖 **Python 3.10+ 标准库**，没有额外模型 API、数据库服务或第三方 Python 库。
+当前源码版本：**0.1.1**，加入业务定义、实现符合性与实际效果的分层校验。正式发行安装示例仍使用 v0.1.0；源码更新与发行标签分别管理。本地执行工具依赖 **Python 3.10+ 标准库**，没有额外模型 API、数据库服务或第三方 Python 库。
 
 [下载发行包](https://github.com/zhongky1995/acceptance-testing-plugin/releases) · [自动验证](https://github.com/zhongky1995/acceptance-testing-plugin/actions/workflows/validate.yml) · [反馈问题](https://github.com/zhongky1995/acceptance-testing-plugin/issues)
 
@@ -39,7 +39,7 @@ Evidence-based acceptance testing for AI-built products: risk-based planning, ex
 | 验收总控 | 选择场景、安排流程、控制预算、继续及复测 |
 | 测试规划 | 阅读材料、确定标准与来源、按风险选择用例 |
 | 技术验证 | 构建、单元、集成、接口、数据及按需专项 |
-| 业务验收 | 角色、规则、用户流程、computer use 与结果核验 |
+| 业务验收 | 业务定义与各方价值、规则、完整用户任务、真实效果及问题定位 |
 | 交付评估 | 按需检查环境、复制、依赖、稳定性和成本 |
 | 验收报告 | 依据记录解释结果、缺陷、反馈与未测范围 |
 
@@ -52,6 +52,8 @@ Evidence-based acceptance testing for AI-built products: risk-based planning, ex
 - 宿主浏览器、computer use 或人工执行的断言及原始文件导入。
 - 失败/受阻/跳过/未执行/不稳定分别记录；证据摘要与当前文件快照核验。
 - 需求对应、六维报告、费用上界与已知实际费用、继续与新轮复测。
+
+业务验收先核对定义与标准依据，再检查实现是否兑现，并按范围核验真实受益者效果。必要检查写入门禁用例，分析与原始证据关联；不自动调用模型评判商业价值。详见[业务分析与校验](plugins/acceptance-testing/references/business-validation.md)。
 
 测试框架和浏览器能力来自项目及宿主，本插件不自动安装。性能、安全、AI 评测等采用按需方法与已有工具，不自带完整测试平台。当前不自动跨轮复用门禁通过结果、不自动解析完整改动依赖图，也不自带业务代码修复或发布流程。
 
