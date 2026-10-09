@@ -2,14 +2,34 @@
 from collections import Counter
 from pathlib import Path
 from qa_contracts import DIMENSIONS, validate
-from qa_runtime import case_status, current_snapshot, totals, verify_evidence
-from qa_store import QAError, digest, load, now, save
+from qa_runtime import case_status, current_snapshot, totals, verify_evidence, verify_observation
+from qa_acceptance import LAYERS, LAYER_LABELS, assessment, readiness
+from qa_store import QAError, SCHEMA_VERSION, digest, load, now, save
 
 LABELS = {"passed": "通过", "failed": "失败", "blocked": "受阻", "skipped": "跳过",
           "not_run": "未执行", "flaky": "不稳定", "out_of_scope": "范围外",
-          "inconclusive": "证据不足", "not_assessed": "本轮未评估"}
+          "inconclusive": "证据不足", "not_assessed": "本轮未评估", "deferred": "本轮未评估", "not_applicable": "有依据地不适用"}
 DIMENSION_LABELS = {"functional": "功能与业务", "reliability": "稳定性与恢复",
                     "environment": "环境兼容", "delivery": "部署与复制", "cost": "成本负担", "evidence": "证据完整性"}
+
+
+def checkpoint_results(row, directory):
+    points = row["assessment"]["checkpoints"]
+    if row["assessment"]["layer"] == "implementation" or row["status"] not in {"passed", "failed", "flaky"}:
+        return {point: row["status"] for point in points}
+    histories = {point: [] for point in points}
+    for attempt in row["attempts"]:
+        status = attempt["status"]
+        payload = None
+        if status in {"passed", "failed"}:
+            payload = load(Path(directory) / "evidence" / row["id"] / str(attempt["attempt"]) / "observation.json")
+        for point in points:
+            state = status
+            if payload is not None:
+                assertions = [a for a in payload["assertions"] if a.get("checkpoint") == point]
+                state = "failed" if any(not a["passed"] for a in assertions) else "passed" if assertions else "inconclusive"
+            histories[point].append({"status": state})
+    return {point: case_status(history) for point, history in histories.items()}
 
 
 def evaluate(session, directory):
@@ -31,6 +51,9 @@ def evaluate(session, directory):
                 issues.append("原始证据缺失或校验不一致")
             if any(a.get("snapshot_digest") != plan["snapshot"]["digest"] or a.get("environment_hash") != environment_hash for a in attempts):
                 issues.append("结果版本或环境不匹配")
+            for attempt in attempts:
+                if attempt.get("status") in {"passed", "failed", "flaky"}:
+                    issues.extend(verify_observation(session, case, attempt, directory))
             if issues:
                 status = "blocked"
         if not fresh and status in {"passed", "failed", "flaky"}:
@@ -38,7 +61,13 @@ def evaluate(session, directory):
             status = "blocked"
         row = {"id": case["id"], "title": case["title"], "dimension": case["dimension"],
                "requirement_ids": case["requirement_ids"], "required": case["required"],
-               "status": status, "attempts": attempts, "issues": issues}
+               "status": status, "attempts": attempts, "issues": issues, "assessment": assessment(case)}
+        try:
+            row["checkpoint_results"] = checkpoint_results(row, directory)
+        except (QAError, KeyError, TypeError):
+            issues.append("无法读取逐点观察，需重新核验证据")
+            row["status"] = status = "blocked"
+            row["checkpoint_results"] = {point: "blocked" for point in row["assessment"]["checkpoints"]}
         rows.append(row)
         if case["required"]:
             if status == "failed":
@@ -71,11 +100,39 @@ def evaluate(session, directory):
         else:
             state = "passed"
         dimensions[dimension] = state
+    acceptance = readiness(plan, snapshot)
+    gaps.extend(acceptance["gaps"])
+    by_id = {row["id"]: row for row in rows}
+    for item in acceptance["obligations"]:
+        matching = [by_id[cid] for cid in item["case_ids"]]
+        states = [r["checkpoint_results"][item["checkpoint"]] for r in matching]
+        item["status"] = ("failed" if "failed" in states else "flaky" if "flaky" in states else
+                          "passed" if states and all(s == "passed" for s in states) else "inconclusive")
+    layer_results = {}
+    for layer in LAYERS:
+        rule = acceptance["layers"].get(layer, {"status": "deferred"})
+        obligations = [o for o in acceptance["obligations"] if o["layer"] == layer]
+        selected = [r for r in rows if r["required"] and r["status"] != "out_of_scope" and r["assessment"]["layer"] == layer]
+        if any(r["status"] == "failed" for r in selected):
+            state = "failed"
+        elif acceptance.get("layer_gaps", {}).get(layer):
+            state = "inconclusive"
+        elif rule["status"] != "required":
+            state = "not_applicable" if rule["status"] == "not_applicable" else "not_assessed"
+        elif not obligations or any(o["status"] != "passed" for o in obligations) or any(r["status"] != "passed" for r in selected):
+            state = "inconclusive"
+        else:
+            state = "passed"
+        layer_results[layer] = state
+    acceptance["results"] = layer_results
+    acceptance["methods"] = sorted({a["method"] for row in rows for a in row["attempts"] if a.get("method")})
     gate = "failed" if failures else "inconclusive" if gaps else "passed"
-    return {"schema_version": "1.0", "generated_at": now(), "goal": plan["goal"], "scenario": plan["scenario"],
+    product_accepted = gate == "passed" and acceptance["scope"] == "product"
+    return {"schema_version": SCHEMA_VERSION, "generated_at": now(), "goal": plan["goal"], "scenario": plan["scenario"],
             "project_root": plan["project_root"], "environment": plan["environment"],
             "plan_hash": session["plan_hash"], "snapshot": snapshot, "fresh": fresh, "gate": gate,
             "blocking_failures": failures, "gaps": gaps, "dimensions": dimensions,
+            "acceptance": acceptance, "product_accepted": product_accepted,
             "counts": dict(Counter(r["status"] for r in rows)), "coverage": coverage, "cases": rows,
             "usage": used, "limits": plan["limits"], "notes": session.get("notes", []),
             "feedback": plan.get("feedback", [])}
@@ -86,11 +143,28 @@ def cell(value):
 
 
 def render(report, path):
+    acceptance = report["acceptance"]
+    scope_label = {"product": "本轮产品验收", "focused": "限定范围检查", "legacy": "历史方案复核"}[acceptance["scope"]]
     lines = ["# 验收测试报告", "", f"**本轮结论：{LABELS[report['gate']]}**", "",
+             f"结论范围：{scope_label}；产品验收门禁：{'满足' if report['product_accepted'] else '未获得通过结论'}。", "",
              f"目标：{report['goal']}", f"场景：{report['scenario']}", f"项目：{report['project_root']}",
              f"生成时间（UTC）：{report['generated_at']}", f"方案标识：`{report['plan_hash']}`", "",
              "结论只覆盖本轮约定范围。范围外能力不作为本轮失败，也不意味着已经通过。", "",
-             "## 各维度结果", "", "| 维度 | 结论 |", "| --- | --- |"]
+             "## 三类验收结论", "", "| 板块 | 结论 |", "| --- | --- |"]
+    for layer, status in acceptance["results"].items():
+        lines.append(f"| {LAYER_LABELS[layer]} | {LABELS[status]} |")
+    lines += ["", "需求适配通过仅代表已定义标准及任务匹配检查；不自动证明真实业务效果。Agent 走查不等于真实用户研究。",
+              "", "## 自动推导的检查点", "", "| 任务 | 板块 | 检查点 | 用例 | 结论 |", "| --- | --- | --- | --- | --- |"]
+    for item in acceptance["obligations"]:
+        lines.append(f"| {cell(item['journey_id'] or '本轮')} | {LAYER_LABELS[item['layer']]} | {cell(item['checkpoint'])} | {', '.join(item['case_ids']) or '无'} | {LABELS[item['status']]} |")
+    lines += ["", "## 未评估与不适用依据", ""]
+    if acceptance["scope"] == "focused":
+        lines.append(f"- 限定范围：{cell(acceptance['reason'])}；来源：{cell('; '.join(acceptance['sources']))}。")
+    for exception in acceptance["exceptions"]:
+        label = exception.get("layer") or exception.get("path") or f"{exception.get('journey_id')}/{exception.get('state')}"
+        state = LABELS.get(exception.get("status"), "界面线索排除")
+        lines.append(f"- {cell(label)}（{state}）：{cell(exception['reason'])}；来源：{cell('; '.join(exception['sources']))}。")
+    lines += ["", "## 各维度结果", "", "| 维度 | 结论 |", "| --- | --- |"]
     for dimension, status in report["dimensions"].items():
         lines.append(f"| {DIMENSION_LABELS[dimension]} | {LABELS[status]} |")
     lines += ["", "## 阻断与证据缺口", ""]

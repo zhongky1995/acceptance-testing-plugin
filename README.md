@@ -4,9 +4,9 @@
 
 Evidence-based acceptance testing for AI-built products: risk-based planning, existing-environment reuse, technical and business checks, budget controls, and verifiable reports.
 
-当前源码版本：**0.1.1**，加入业务定义、实现符合性与实际效果的分层校验。正式发行安装示例仍使用 v0.1.0；源码更新与发行标签分别管理。本地执行工具依赖 **Python 3.10+ 标准库**，没有额外模型 API、数据库服务或第三方 Python 库。
+当前版本：**0.2.0**，增加独立交互验收与程序防漏检查，使用 schema 1.1。安装示例与发行包均对应 v0.2.0；变更及升级注意事项见 [0.2.0 发布说明](docs/RELEASE-0.2.0.md)。本地执行工具依赖 **Python 3.10+ 标准库**，没有额外模型 API、数据库服务或第三方 Python 库。
 
-[下载发行包](https://github.com/zhongky1995/acceptance-testing-plugin/releases) · [自动验证](https://github.com/zhongky1995/acceptance-testing-plugin/actions/workflows/validate.yml) · [反馈问题](https://github.com/zhongky1995/acceptance-testing-plugin/issues)
+[下载 v0.2.0](https://github.com/zhongky1995/acceptance-testing-plugin/releases/tag/v0.2.0) · [自动验证](https://github.com/zhongky1995/acceptance-testing-plugin/actions/workflows/validate.yml) · [反馈问题](https://github.com/zhongky1995/acceptance-testing-plugin/issues)
 
 ## 使用
 
@@ -40,6 +40,7 @@ Evidence-based acceptance testing for AI-built products: risk-based planning, ex
 | 测试规划 | 阅读材料、确定标准与来源、按风险选择用例 |
 | 技术验证 | 构建、单元、集成、接口、数据及按需专项 |
 | 业务验收 | 业务定义与各方价值、规则、完整用户任务、真实效果及问题定位 |
+| 交互验收 | 入口、理解、动线、可见反馈、完成与异常恢复 |
 | 交付评估 | 按需检查环境、复制、依赖、稳定性和成本 |
 | 验收报告 | 依据记录解释结果、缺陷、反馈与未测范围 |
 
@@ -52,12 +53,29 @@ Evidence-based acceptance testing for AI-built products: risk-based planning, ex
 - 宿主浏览器、computer use 或人工执行的断言及原始文件导入。
 - 失败/受阻/跳过/未执行/不稳定分别记录；证据摘要与当前文件快照核验。
 - 需求对应、六维报告、费用上界与已知实际费用、继续与新轮复测。
+- 独立计算实现、需求适配、交互三类结论；按任务推导检查点，核验观察前记录和逐点证据，区分整体验收与限定检查。
 
 业务验收先核对定义与标准依据，再检查实现是否兑现，并按范围核验真实受益者效果。必要检查写入门禁用例，分析与原始证据关联；不自动调用模型评判商业价值。详见[业务分析与校验](plugins/acceptance-testing/references/business-validation.md)。
 
 测试框架和浏览器能力来自项目及宿主，本插件不自动安装。性能、安全、AI 评测等采用按需方法与已有工具，不自带完整测试平台。当前不自动跨轮复用门禁通过结果、不自动解析完整改动依赖图，也不自带业务代码修复或发布流程。
 
 文件快照不能证明外部服务/模型/配置未变；观察者必须核验环境。费用和安装声明需要如实填写，执行工具不是网络/系统沙盒。宿主模型使用费无法取得时标未知，不能宣称总费用为零。
+
+## 不同 Agent 如何避免漏项
+
+程序从计划推导必要检查点，不接受一个“已完成”标记代替：只列后端测试、将必要交互改成可选、遗漏任务步骤/适用状态，都无法满足 product 门禁。界面文件/前端依赖会触发需要核对的线索；未发现线索不证明没有前端。
+
+实际观察前由 check 生成绑定本轮版本、环境、用例和尝试的记录；导入时核对每个检查点的预期、实际、证据定位及操作轨迹。接手者继续同一档案，程序保留失败和已完成项。数据合同见 [程序验收协议](plugins/acceptance-testing/references/acceptance-protocol.md)。
+
+日常技术小修复可有依据地使用 focused 范围，复用环境，只跑必要检查。即使该范围通过，也不会得到 product_accepted=true。接入发布流程时，由控制端调用：
+
+```sh
+python3 plugins/acceptance-testing/scripts/qa.py gate --session-dir /实际验收档案目录
+```
+
+退出 0 才表示本轮产品验收门禁满足。程序能核验流程和证据结构，不能独立证明图片语义、用户身份或 Agent 声明真实；Agent 走查不能替代真实用户观察。外部系统绕过 gate 或同权限修改整个工具不在此本地插件的约束范围内。
+
+旧 schema 1.0 档案保留为历史；新版可解释历史但不能沿用旧协议执行或取得新版整体通过，应新建轮次补齐本轮证据。
 
 ## 安装与更新
 
@@ -66,7 +84,7 @@ Evidence-based acceptance testing for AI-built products: risk-based planning, ex
 在支持插件命令的 Codex 中安装固定发行版本：
 
 ```sh
-codex plugin marketplace add zhongky1995/acceptance-testing-plugin --ref v0.1.0
+codex plugin marketplace add zhongky1995/acceptance-testing-plugin --ref v0.2.0
 codex plugin add acceptance-testing@acceptance-testing-local
 ```
 
@@ -74,12 +92,12 @@ codex plugin add acceptance-testing@acceptance-testing-local
 
 命令以当前客户端帮助为准；终端里的旧版 Codex 可能没有插件命令，桌面应用随附版本可能不同。可先检查 `codex plugin --help`，再选择支持插件的客户端。
 
-也可下载发行页的 `acceptance-testing-marketplace-0.1.0.zip`，解压到自选位置，用解压目录添加本地来源，然后安装同名插件。克隆整个仓库后也可以这样安装：
+也可下载发行页的 `acceptance-testing-marketplace-0.2.0.zip`，解压到自选位置，用解压目录添加本地来源，然后安装同名插件。克隆整个仓库后也可以这样安装：
 
 ```sh
 git clone https://github.com/zhongky1995/acceptance-testing-plugin.git
 cd acceptance-testing-plugin
-git checkout v0.1.0
+git checkout v0.2.0
 codex plugin marketplace add .
 codex plugin add acceptance-testing@acceptance-testing-local
 ```
@@ -89,6 +107,8 @@ codex plugin add acceptance-testing@acceptance-testing-local
 发行页提供插件 ZIP、目录来源 ZIP 和 `SHA256SUMS`。支持直接导入插件 ZIP 的宿主可使用前者；Codex 本地来源使用后者或 GitHub 仓库。公开仓库不等于已进入官方插件目录。
 
 更新时按客户端流程更新来源和插件；需要固定版本时使用发行标签。不要仅替换部分脚本，也不要覆盖目标项目的验收档案。
+
+从 0.1.x 升级：先保留原验收档案，再将来源切换到 v0.2.0 并更新插件。新验收需建立 schema 1.1 轮次；旧 schema 1.0 仅可生成历史报告，其通过结果不能自动升级为新版整体验收通过。
 
 ## 报告
 

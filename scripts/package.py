@@ -18,7 +18,9 @@ def validate_package():
     assert (ROOT / "LICENSE").is_file(), "Missing root license"
     assert (PLUGIN / "LICENSE").read_bytes() == (ROOT / "LICENSE").read_bytes(), "License mismatch"
     assert compatibility["skills"] == "./skills/"
-    assert len(list((PLUGIN / "skills").glob("*/SKILL.md"))) == 6
+    expected_skills = {"acceptance-controller", "acceptance-plan", "acceptance-technical", "acceptance-business",
+                       "acceptance-experience", "acceptance-delivery", "acceptance-report"}
+    assert {p.parent.name for p in (PLUGIN / "skills").glob("*/SKILL.md")} == expected_skills
     for skill in (PLUGIN / "skills").glob("*/SKILL.md"):
         text = skill.read_text()
         assert text.startswith("---\n") and f"name: {skill.parent.name}" in text

@@ -2,6 +2,8 @@
 
 原始 session 与证据用于程序计算 report.json 和 report.md。模型在报告之外补充解释，不改写程序判定。
 
+schema 1.1 按 [程序验收协议](acceptance-protocol.md)增加三类结论、任务/步骤/适用状态覆盖和 check 记录复核。既有六维质量指标继续保留，与三类验收正交。focused 即便 gate=passed 也有 product_accepted=false；产品发布门禁调用 `qa.py gate --session-dir RUN`，不能只看某条命令的成功退出。
+
 ## 门禁优先级
 
 1. 已知必需用例失败 → failed。
