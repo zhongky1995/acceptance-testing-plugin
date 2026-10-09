@@ -1,0 +1,4 @@
+interface:
+  display_name: "交互验收"
+  short_description: "按用户任务检查入口、交互动线、状态反馈及恢复，用真实证据给出独立结论。"
+  default_prompt: "使用 $acceptance-experience 验收当前项目的关键用户任务和交互动线，复用已有环境并保留实际证据。"

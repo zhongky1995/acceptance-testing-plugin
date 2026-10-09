@@ -8,7 +8,7 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-SCHEMA_VERSION = "1.0"
+SCHEMA_VERSION = "1.1"
 EXCLUDED = {".git", ".acceptance", ".venv", "venv", "node_modules", "__pycache__",
             ".pytest_cache", ".mypy_cache", ".ruff_cache", "dist", "build", "coverage",
             ".next", ".nuxt", "target", ".DS_Store"}
@@ -66,7 +66,7 @@ def project_snapshot(root, exclusions=(), max_files=10000, max_bytes=134217728):
     if not root.is_dir():
         raise QAError("项目目录不存在")
     ignored_paths = [Path(p).resolve() for p in exclusions]
-    hashes, reasons, total_bytes = [], [], 0
+    hashes, reasons, ui_signals, total_bytes = [], [], [], 0
     for current, dirs, files in os.walk(root, followlinks=False):
         current = Path(current)
         dirs[:] = sorted(d for d in dirs if d not in EXCLUDED and
@@ -87,13 +87,23 @@ def project_snapshot(root, exclusions=(), max_files=10000, max_bytes=134217728):
                 if len(hashes) >= max_files or total_bytes + size > max_bytes:
                     reasons.append("快照达到读取上限，不能据此判定证据仍有效")
                     return {"digest": digest(hashes), "complete": False, "files": len(hashes),
-                            "bytes": total_bytes, "limitations": reasons, "excluded_names": sorted(EXCLUDED)}
+                            "bytes": total_bytes, "limitations": reasons, "excluded_names": sorted(EXCLUDED), "ui_signals": ui_signals}
                 hashes.append([str(path.relative_to(root)), file_hash(path)])
                 total_bytes += size
+                if path.suffix.lower() in {".html", ".htm", ".tsx", ".jsx", ".vue", ".svelte", ".qml", ".storyboard", ".xib"}:
+                    ui_signals.append(str(path.relative_to(root)))
+                elif name == "package.json" and size < 1048576:
+                    try:
+                        package = load(path)
+                        dependencies = set(package.get("dependencies", {})) | set(package.get("devDependencies", {}))
+                        if dependencies & {"react", "vue", "svelte", "next", "nuxt", "electron", "@angular/core"}:
+                            ui_signals.append(str(path.relative_to(root)))
+                    except (QAError, AttributeError, TypeError):
+                        pass
             except OSError as exc:
                 reasons.append(f"读取失败：{path.relative_to(root)}: {exc}")
     return {"digest": digest(hashes), "complete": not reasons, "files": len(hashes),
-            "bytes": total_bytes, "limitations": reasons, "excluded_names": sorted(EXCLUDED)}
+            "bytes": total_bytes, "limitations": reasons, "excluded_names": sorted(EXCLUDED), "ui_signals": ui_signals}
 
 
 def scan(root, exclusions=()):

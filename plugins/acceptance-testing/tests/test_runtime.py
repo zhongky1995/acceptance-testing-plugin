@@ -10,7 +10,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from qa_adapters import parse
 from qa_contracts import validate
 from qa_report import evaluate, report_session
-from qa_runtime import record, run
+from qa_runtime import check_case, record, run
+from acceptance_fixtures import focused_policy
 from qa_store import QAError, digest, load, project_snapshot, save, scan
 
 
@@ -23,7 +24,7 @@ class RuntimeTests(unittest.TestCase):
         (self.root / "app.py").write_text("value = 1\n")
         self.session = Path(self.temp.name) / "run"
         self.plan_path = Path(self.temp.name) / "plan.json"
-        self.plan = {"schema_version": "1.0", "project_root": str(self.root), "scenario": "local-iteration",
+        self.plan = {"schema_version": "1.1", "acceptance": focused_policy(), "project_root": str(self.root), "scenario": "local-iteration",
                      "goal": "验证本地规则", "snapshot": project_snapshot(self.root),
                      "environment": {"python": sys.version.split()[0], "model": "offline"},
                      "limits": {"execution_seconds": 10, "max_attempts_per_case": 2, "max_external_cost": 0, "currency": "CNY"},
@@ -197,6 +198,7 @@ class RuntimeTests(unittest.TestCase):
         proof = Path(self.temp.name) / "proof.txt"
         proof.write_text("Recorded data assertion, not a generated screenshot")
         payload["evidence_files"] = [str(proof)]
+        payload["check_id"] = check_case(self.plan_path, self.session, "C1")["check_id"]
         save(observation, payload)
         record(self.plan_path, self.session, observation)
         self.assertEqual(self.report()["gate"], "passed")

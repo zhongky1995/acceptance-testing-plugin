@@ -12,7 +12,7 @@ from qa_store import save, scan
 def make_plan(project, directory):
     inventory = scan(project, [directory])
     save(directory / "inventory.json", inventory)
-    plan = {"schema_version": "1.0", "project_root": str(project), "scenario": "local-iteration",
+    plan = {"schema_version": "1.1", "project_root": str(project), "scenario": "local-iteration",
             "goal": "本地审批业务规则验收", "snapshot": inventory["snapshot"],
             "environment": {"python": sys.version.split()[0], "mode": "offline-local-fixture"},
             "limits": {"execution_seconds": 30, "max_attempts_per_case": 2, "max_external_cost": 0, "currency": "CNY"},
@@ -24,6 +24,11 @@ def make_plan(project, directory):
                        "executor": {"kind": "command", "argv": ["{python}", "check_rules.py", "--output", "{evidence_dir}/result.json"],
                                     "adapter": "native", "result_path": "{evidence_dir}/result.json", "timeout_seconds": 10,
                                     "external_calls": False, "external_cost_bound": 0, "installs": False}}],
+            "acceptance": {"scope": "focused", "reason": "只演示审批规则缺陷的发现与修复复测", "sources": ["PRD.md:3-5"],
+                           "surfaces": ["gui", "api"], "journeys": [], "surface_exclusions": [],
+                           "layers": {"implementation": {"status": "required"},
+                                      "need_fit": {"status": "deferred", "reason": "样例只验证既有规则的实现", "sources": ["PRD.md:3-5"]},
+                                      "interaction": {"status": "deferred", "reason": "该命令样例未执行浏览器", "sources": ["ARCHITECTURE.md"]}}},
             "feedback": []}
     save(directory / "plan.json", plan)
     return directory / "plan.json"

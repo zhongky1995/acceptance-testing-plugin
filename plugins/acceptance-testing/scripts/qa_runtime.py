@@ -6,10 +6,12 @@ import signal
 import subprocess
 import sys
 import time
+import uuid
 from pathlib import Path
 from qa_adapters import parse
 from qa_contracts import need, number, validate
-from qa_store import QAError, digest, file_hash, load, now, project_snapshot, redact, save
+from qa_acceptance import assessment, baseline_blocker, observation_issues
+from qa_store import QAError, SCHEMA_VERSION, digest, file_hash, load, now, project_snapshot, redact, save
 
 
 @contextlib.contextmanager
@@ -42,7 +44,9 @@ def current_snapshot(plan, directory):
 
 def open_session(plan_path, directory):
     plan = validate(load(plan_path))
+    need(plan["schema_version"] == SCHEMA_VERSION, "旧方案仅支持历史报告；请用新版 init 建立新轮次，不能降级绕过验收协议")
     directory = Path(directory).resolve()
+    need(not Path(plan["project_root"]).resolve().is_relative_to(directory), "档案目录不能等于项目根目录或其祖先，避免排除整个被测项目")
     current = current_snapshot(plan, directory)
     need(current["complete"] and plan["snapshot"]["complete"], "快照不完整，先缩小项目范围或补齐条件")
     need(current["digest"] == plan["snapshot"]["digest"], "项目已变化，请新建一轮方案；不能沿用旧快照执行")
@@ -51,8 +55,8 @@ def open_session(plan_path, directory):
         session = load(path)
         need(session.get("plan_hash") == digest(plan), "本轮方案已冻结；改变标准、环境或范围需要新建一轮")
     else:
-        session = {"schema_version": "1.0", "created_at": now(), "plan_hash": digest(plan),
-                   "plan": plan, "results": {}, "notes": []}
+        session = {"schema_version": SCHEMA_VERSION, "created_at": now(), "plan_hash": digest(plan),
+                   "plan": plan, "results": {}, "checks": {}, "notes": []}
         save(path, session)
         save(directory / "frozen-plan.json", plan)
     return session
@@ -77,7 +81,7 @@ def totals(session):
             "cost_actual_incomplete": any(a.get("cost_reserved", 0) > 0 and a.get("cost_actual") is None for a in attempts)}
 
 
-def permitted(session, case):
+def permitted(session, case, directory=None):
     limits, used, executor = session["plan"]["limits"], totals(session), case["executor"]
     if executor.get("installs") and not session["plan"]["allow_install"]:
         return "本轮复用环境，未启用依赖安装"
@@ -88,7 +92,15 @@ def permitted(session, case):
     for dep in case.get("prerequisites", []):
         if case_status(session["results"].get(dep, [])) != "passed":
             return f"前置用例 {dep} 尚未稳定通过"
-    return None
+    statuses = {}
+    cases = {c["id"]: c for c in session["plan"]["cases"]}
+    for cid, attempts in session["results"].items():
+        state = case_status(attempts)
+        if state == "passed" and directory and not all(verify_evidence(a, directory)
+                and not verify_observation(session, cases[cid], a, directory) for a in attempts if a.get("status") == "passed"):
+            state = "blocked"
+        statuses[cid] = state
+    return baseline_blocker(session["plan"], case, statuses)
 
 
 def ordered_cases(plan):
@@ -216,7 +228,7 @@ def run(plan_path, directory, case_id=None, retry=False):
             if len(entries) >= plan["limits"]["max_attempts_per_case"]:
                 session["notes"].append(f"{case['id']} 已达到重试上限")
                 continue
-            reason = permitted(session, case)
+            reason = permitted(session, case, directory)
             attempt = {"attempt": len(entries) + 1, "started_at": now(), "status": "running",
                        "snapshot_digest": plan["snapshot"]["digest"], "environment_hash": digest(plan["environment"])}
             entries.append(attempt)
@@ -262,7 +274,7 @@ def record(plan_path, directory, observation_path):
             number(payload["external_cost_actual"], "external_cost_actual")
         entries = session["results"].setdefault(case["id"], [])
         need(len(entries) < session["plan"]["limits"]["max_attempts_per_case"], "已达到记录/重试上限")
-        policy_issue = permitted(session, case)
+        policy_issue = permitted(session, case, directory)
         assertions = payload.get("assertions", [])
         files = payload.get("evidence_files", [])
         if status in {"passed", "failed", "flaky"}:
@@ -274,6 +286,14 @@ def record(plan_path, directory, observation_path):
             need(all(a["passed"] for a in assertions), "失败断言不能记录为通过")
         if status == "failed":
             need(any(not a["passed"] for a in assertions), "失败结果需要失败断言")
+        issues = observation_issues(session["plan"], case, payload)
+        check_id = payload.get("check_id")
+        receipt = session.get("checks", {}).get(check_id) if isinstance(check_id, str) else None
+        if not valid_receipt(session, case["id"], receipt, len(entries) + 1, consumed=False):
+            issues.append("缺少本次观察前的有效 check 记录，或记录已被使用")
+        if policy_issue:
+            issues.insert(0, policy_issue)
+        policy_issue = "；".join(issues)
         resolved_files = []
         for raw in files:
             path = Path(raw)
@@ -293,7 +313,10 @@ def record(plan_path, directory, observation_path):
                         "cost_reserved": case["executor"].get("external_cost_bound", 0),
                         "cost_actual": payload.get("external_cost_actual"),
                         "snapshot_digest": payload["observed_snapshot"], "environment_hash": payload["environment_hash"],
-                        "evidence": evidence_manifest(attempt_dir), "evidence_origin": "host_observation"})
+                        "evidence": evidence_manifest(attempt_dir), "evidence_origin": "host_observation",
+                        "check_id": check_id, "method": payload.get("method"), "actor_kind": payload.get("actor_kind")})
+        if receipt and valid_receipt(session, case["id"], receipt, len(entries), consumed=False):
+            receipt["consumed"] = True
         if policy_issue:
             entries[-1].update({"observed_status": status, "status": "blocked", "reason": f"{policy_issue}；实际观察已保留：{saved_payload['reason']}"})
             session["notes"].append(f"{case['id']} 的宿主操作未满足执行条件；保留实际时间、费用与证据，不能用其放行。")
@@ -306,6 +329,51 @@ def check_case(plan_path, directory, case_id):
         session = open_session(plan_path, directory)
         case = next((c for c in session["plan"]["cases"] if c["id"] == case_id), None)
         need(case is not None and case["in_scope"], "用例不存在或不在本轮范围内")
-        if len(session["results"].get(case_id, [])) >= session["plan"]["limits"]["max_attempts_per_case"]:
-            return "已达到尝试上限"
-        return permitted(session, case)
+        attempt = len(session["results"].get(case_id, [])) + 1
+        reason = "已达到尝试上限" if attempt > session["plan"]["limits"]["max_attempts_per_case"] else permitted(session, case, directory)
+        result = {"allowed": reason is None, "reason": reason, "case_id": case_id,
+                  "required_checkpoints": assessment(case)["checkpoints"], "note": "仅允许执行，不代表测试通过。"}
+        if not reason and case["executor"]["kind"] == "observation":
+            checks = session.setdefault("checks", {})
+            check_id = next((key for key, value in checks.items() if valid_receipt(session, case_id, value, attempt, False)), None)
+            if check_id is None:
+                check_id = uuid.uuid4().hex
+                checks[check_id] = {"case_id": case_id, "attempt": attempt, "plan_hash": session["plan_hash"],
+                                    "snapshot": session["plan"]["snapshot"]["digest"], "environment_hash": digest(session["plan"]["environment"]),
+                                    "created_at": now(), "consumed": False}
+                save(directory / "session.json", session)
+            result["check_id"] = check_id
+            result["observation_template"] = {"case_id": case_id, "check_id": check_id, "status": "blocked", "reason": "尚未实际观察",
+                "observed_snapshot": session["plan"]["snapshot"]["digest"], "environment_hash": digest(session["plan"]["environment"]),
+                "duration_seconds": 0, "external_cost_actual": None, "method": "", "actor_kind": "", "evidence_files": [],
+                "assertions": [{"checkpoint": p, "expected": "", "actual": "", "passed": False, "evidence_indices": []}
+                               for p in assessment(case)["checkpoints"]]}
+            if assessment(case)["layer"] == "interaction":
+                result["observation_template"]["execution"] = {"surface": "", "entry": "", "backend_bypass": None,
+                    "source_access": "", "assistance": [], "trace": []}
+        return result
+
+
+def valid_receipt(session, case_id, receipt, attempt, consumed):
+    return (isinstance(receipt, dict) and receipt.get("case_id") == case_id and receipt.get("attempt") == attempt
+            and receipt.get("consumed") is consumed and receipt.get("plan_hash") == session["plan_hash"]
+            and receipt.get("snapshot") == session["plan"]["snapshot"]["digest"]
+            and receipt.get("environment_hash") == digest(session["plan"]["environment"]))
+
+
+def verify_observation(session, case, attempt, directory):
+    if session["plan"]["schema_version"] == "1.0" or case["executor"]["kind"] != "observation":
+        return []
+    path = Path(directory) / "evidence" / case["id"] / str(attempt["attempt"]) / "observation.json"
+    try:
+        payload = load(path)
+        issues = observation_issues(session["plan"], case, payload)
+        check_id = attempt.get("check_id")
+        receipt = session.get("checks", {}).get(check_id) if isinstance(check_id, str) else None
+        if not valid_receipt(session, case["id"], receipt, attempt["attempt"], consumed=True) or payload.get("check_id") != check_id:
+            issues.append("观察前检查记录不完整或不匹配")
+        if payload.get("status") != attempt["status"]:
+            issues.append("观察原始状态与执行记录不匹配")
+        return issues
+    except (QAError, TypeError, AttributeError):
+        return ["无法核验结构化观察记录"]
