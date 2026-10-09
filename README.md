@@ -4,9 +4,9 @@
 
 Evidence-based acceptance testing for AI-built products: risk-based planning, existing-environment reuse, technical and business checks, budget controls, and verifiable reports.
 
-当前源码版本：**0.2.0**，增加独立交互验收与程序防漏检查，使用 schema 1.1。正式发行安装示例仍使用 v0.1.0；源码更新与发行标签分别管理。本地执行工具依赖 **Python 3.10+ 标准库**，没有额外模型 API、数据库服务或第三方 Python 库。
+当前版本：**0.2.0**，增加独立交互验收与程序防漏检查，使用 schema 1.1。安装示例与发行包均对应 v0.2.0；变更及升级注意事项见 [0.2.0 发布说明](docs/RELEASE-0.2.0.md)。本地执行工具依赖 **Python 3.10+ 标准库**，没有额外模型 API、数据库服务或第三方 Python 库。
 
-[下载发行包](https://github.com/zhongky1995/acceptance-testing-plugin/releases) · [自动验证](https://github.com/zhongky1995/acceptance-testing-plugin/actions/workflows/validate.yml) · [反馈问题](https://github.com/zhongky1995/acceptance-testing-plugin/issues)
+[下载 v0.2.0](https://github.com/zhongky1995/acceptance-testing-plugin/releases/tag/v0.2.0) · [自动验证](https://github.com/zhongky1995/acceptance-testing-plugin/actions/workflows/validate.yml) · [反馈问题](https://github.com/zhongky1995/acceptance-testing-plugin/issues)
 
 ## 使用
 
@@ -84,7 +84,7 @@ python3 plugins/acceptance-testing/scripts/qa.py gate --session-dir /实际验�
 在支持插件命令的 Codex 中安装固定发行版本：
 
 ```sh
-codex plugin marketplace add zhongky1995/acceptance-testing-plugin --ref v0.1.0
+codex plugin marketplace add zhongky1995/acceptance-testing-plugin --ref v0.2.0
 codex plugin add acceptance-testing@acceptance-testing-local
 ```
 
@@ -92,12 +92,12 @@ codex plugin add acceptance-testing@acceptance-testing-local
 
 命令以当前客户端帮助为准；终端里的旧版 Codex 可能没有插件命令，桌面应用随附版本可能不同。可先检查 `codex plugin --help`，再选择支持插件的客户端。
 
-也可下载发行页的 `acceptance-testing-marketplace-0.1.0.zip`，解压到自选位置，用解压目录添加本地来源，然后安装同名插件。克隆整个仓库后也可以这样安装：
+也可下载发行页的 `acceptance-testing-marketplace-0.2.0.zip`，解压到自选位置，用解压目录添加本地来源，然后安装同名插件。克隆整个仓库后也可以这样安装：
 
 ```sh
 git clone https://github.com/zhongky1995/acceptance-testing-plugin.git
 cd acceptance-testing-plugin
-git checkout v0.1.0
+git checkout v0.2.0
 codex plugin marketplace add .
 codex plugin add acceptance-testing@acceptance-testing-local
 ```
@@ -107,6 +107,8 @@ codex plugin add acceptance-testing@acceptance-testing-local
 发行页提供插件 ZIP、目录来源 ZIP 和 `SHA256SUMS`。支持直接导入插件 ZIP 的宿主可使用前者；Codex 本地来源使用后者或 GitHub 仓库。公开仓库不等于已进入官方插件目录。
 
 更新时按客户端流程更新来源和插件；需要固定版本时使用发行标签。不要仅替换部分脚本，也不要覆盖目标项目的验收档案。
+
+从 0.1.x 升级：先保留原验收档案，再将来源切换到 v0.2.0 并更新插件。新验收需建立 schema 1.1 轮次；旧 schema 1.0 仅可生成历史报告，其通过结果不能自动升级为新版整体验收通过。
 
 ## 报告
 
