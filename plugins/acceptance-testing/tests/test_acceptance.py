@@ -98,6 +98,41 @@ class AcceptanceTests(unittest.TestCase):
         self.assertFalse(report["product_accepted"])
         self.assertTrue(any("interaction" in g for g in report["gaps"]))
 
+    def test_mixed_observation_reports_each_point_without_loosening_gate(self):
+        self.baseline()
+        payload = self.payload("U1")
+        payload["status"] = "failed"
+        next(a for a in payload["assertions"] if a["checkpoint"] == "completion")["passed"] = False
+        report = self.observe(payload)
+        points = {o["checkpoint"]: o["status"] for o in report["acceptance"]["obligations"] if o["layer"] == "interaction"}
+        self.assertEqual(points["entry"], "passed")
+        self.assertEqual(points["completion"], "failed")
+        self.assertEqual(report["gate"], "failed")
+        self.assertFalse(report["product_accepted"])
+        self.assertIn("| entry | U1 | 通过 |", (self.directory / "report.md").read_text())
+
+    def test_point_failure_then_success_remains_flaky(self):
+        self.baseline()
+        payload = self.payload("U1")
+        payload["status"] = "failed"
+        next(a for a in payload["assertions"] if a["checkpoint"] == "completion")["passed"] = False
+        self.observe(payload)
+        report = self.observe(self.payload("U1"))
+        points = {o["checkpoint"]: o["status"] for o in report["acceptance"]["obligations"] if o["layer"] == "interaction"}
+        self.assertEqual(points["entry"], "passed")
+        self.assertEqual(points["completion"], "flaky")
+        self.assertEqual(report["acceptance"]["results"]["interaction"], "inconclusive")
+        self.assertFalse(report["product_accepted"])
+
+    def test_corrupt_evidence_cannot_preserve_point_passes(self):
+        self.complete()
+        proof = next((self.directory / "evidence/U1/1").glob("0-*.txt"))
+        proof.write_text("changed")
+        report = report_session(self.directory)
+        points = [o for o in report["acceptance"]["obligations"] if o["layer"] == "interaction"]
+        self.assertTrue(all(o["status"] == "inconclusive" for o in points))
+        self.assertFalse(report["product_accepted"])
+
     def test_optional_or_out_of_scope_ui_cannot_fill_coverage(self):
         case = self.plan["cases"][2]
         for scoped in [True, False]:

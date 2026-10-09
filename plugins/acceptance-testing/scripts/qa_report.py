@@ -13,6 +13,25 @@ DIMENSION_LABELS = {"functional": "功能与业务", "reliability": "稳定性�
                     "environment": "环境兼容", "delivery": "部署与复制", "cost": "成本负担", "evidence": "证据完整性"}
 
 
+def checkpoint_results(row, directory):
+    points = row["assessment"]["checkpoints"]
+    if row["assessment"]["layer"] == "implementation" or row["status"] not in {"passed", "failed", "flaky"}:
+        return {point: row["status"] for point in points}
+    histories = {point: [] for point in points}
+    for attempt in row["attempts"]:
+        status = attempt["status"]
+        payload = None
+        if status in {"passed", "failed"}:
+            payload = load(Path(directory) / "evidence" / row["id"] / str(attempt["attempt"]) / "observation.json")
+        for point in points:
+            state = status
+            if payload is not None:
+                assertions = [a for a in payload["assertions"] if a.get("checkpoint") == point]
+                state = "failed" if any(not a["passed"] for a in assertions) else "passed" if assertions else "inconclusive"
+            histories[point].append({"status": state})
+    return {point: case_status(history) for point, history in histories.items()}
+
+
 def evaluate(session, directory):
     plan = validate(session["plan"])
     if digest(plan) != session.get("plan_hash"):
@@ -43,6 +62,12 @@ def evaluate(session, directory):
         row = {"id": case["id"], "title": case["title"], "dimension": case["dimension"],
                "requirement_ids": case["requirement_ids"], "required": case["required"],
                "status": status, "attempts": attempts, "issues": issues, "assessment": assessment(case)}
+        try:
+            row["checkpoint_results"] = checkpoint_results(row, directory)
+        except (QAError, KeyError, TypeError):
+            issues.append("无法读取逐点观察，需重新核验证据")
+            row["status"] = status = "blocked"
+            row["checkpoint_results"] = {point: "blocked" for point in row["assessment"]["checkpoints"]}
         rows.append(row)
         if case["required"]:
             if status == "failed":
@@ -80,8 +105,9 @@ def evaluate(session, directory):
     by_id = {row["id"]: row for row in rows}
     for item in acceptance["obligations"]:
         matching = [by_id[cid] for cid in item["case_ids"]]
-        item["status"] = ("failed" if any(r["status"] == "failed" for r in matching) else
-                          "passed" if matching and all(r["status"] == "passed" for r in matching) else "inconclusive")
+        states = [r["checkpoint_results"][item["checkpoint"]] for r in matching]
+        item["status"] = ("failed" if "failed" in states else "flaky" if "flaky" in states else
+                          "passed" if states and all(s == "passed" for s in states) else "inconclusive")
     layer_results = {}
     for layer in LAYERS:
         rule = acceptance["layers"].get(layer, {"status": "deferred"})
