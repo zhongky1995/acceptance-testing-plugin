@@ -11,7 +11,7 @@ from qa_adapters import parse
 from qa_contracts import validate
 from qa_report import evaluate, report_session
 from qa_runtime import check_case, record, run
-from acceptance_fixtures import focused_policy
+from acceptance_fixtures import focused_policy, assurance_policy, bind_payload
 from qa_store import QAError, digest, load, project_snapshot, save, scan
 
 
@@ -24,7 +24,7 @@ class RuntimeTests(unittest.TestCase):
         (self.root / "app.py").write_text("value = 1\n")
         self.session = Path(self.temp.name) / "run"
         self.plan_path = Path(self.temp.name) / "plan.json"
-        self.plan = {"schema_version": "1.1", "acceptance": focused_policy(), "project_root": str(self.root), "scenario": "local-iteration",
+        self.plan = {"schema_version": "1.2", "assurance": assurance_policy(), "acceptance": focused_policy(), "project_root": str(self.root), "scenario": "local-iteration",
                      "goal": "验证本地规则", "snapshot": project_snapshot(self.root),
                      "environment": {"python": sys.version.split()[0], "model": "offline"},
                      "limits": {"execution_seconds": 10, "max_attempts_per_case": 2, "max_external_cost": 0, "currency": "CNY"},
@@ -142,7 +142,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(report["gate"], "failed")
 
     def test_budget_blocks_external_execution(self):
-        self.plan["cases"][0]["executor"].update({"external_calls": True, "external_cost_bound": 1})
+        self.plan["cases"][0]["executor"].update({"external_calls": True, "external_call_bound": 1, "external_cost_bound": 1})
         self.execute()
         self.assertEqual(self.report()["gate"], "inconclusive")
         self.assertFalse((self.session / "evidence/C1/1").exists())
@@ -198,6 +198,7 @@ class RuntimeTests(unittest.TestCase):
         proof = Path(self.temp.name) / "proof.txt"
         proof.write_text("Recorded data assertion, not a generated screenshot")
         payload["evidence_files"] = [str(proof)]
+        bind_payload(self.plan, case, payload)
         payload["check_id"] = check_case(self.plan_path, self.session, "C1")["check_id"]
         save(observation, payload)
         record(self.plan_path, self.session, observation)
@@ -235,7 +236,9 @@ class RuntimeTests(unittest.TestCase):
         self.assertFalse(result["complete"])
 
     def test_declared_free_external_call_with_zero_budget(self):
-        self.plan["cases"][0]["executor"].update({"external_calls": True, "external_cost_bound": 0})
+        self.plan["cases"][0]["executor"].update({"external_calls": True, "external_call_bound": 1, "external_cost_bound": 0})
+        self.plan["limits"]["max_external_calls"] = 1
+        self.plan["cases"][0]["executor"]["argv"][2] += ";from pathlib import Path;json.dump({'requests':[{'id':'free-1','status':'succeeded','tokens':0,'cost':0,'evidence':'offline request fixture'}]},open(Path(sys.argv[1]).parent/'usage.json','w'))"
         self.execute()
         self.assertEqual(self.report()["gate"], "passed")
 
@@ -285,12 +288,12 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(report["cases"][0]["attempts"][0]["status"], "failed")
 
     def test_posthoc_overbudget_observation_preserves_actual_cost(self):
-        self.plan["cases"][0]["executor"] = {"kind": "observation", "external_calls": True, "external_cost_bound": 1}
+        self.plan["cases"][0]["executor"] = {"kind": "observation", "external_calls": True, "external_call_bound": 1, "external_cost_bound": 1}
         save(self.plan_path, self.plan)
         observation = Path(self.temp.name) / "observation.json"
         save(observation, {"case_id": "C1", "status": "passed", "reason": "操作实际已发生，应保留证据而非漏记费用", "duration_seconds": 1,
                            "observed_snapshot": self.plan["snapshot"]["digest"], "environment_hash": digest(self.plan["environment"]),
-                           "external_cost_actual": 2,
+                           "external_cost_actual": 2, "usage": {"requests": [{"id": "posthoc-1", "status": "succeeded", "tokens": 0, "cost": 2, "evidence": "app.py:1 synthetic fixture"}]},
                            "assertions": [{"expected": "成功", "actual": "成功", "passed": True}],
                            "evidence_files": [str(self.root / "app.py")]})
         record(self.plan_path, self.session, observation)

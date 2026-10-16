@@ -4,9 +4,9 @@
 
 Evidence-based acceptance testing for AI-built products: risk-based planning, existing-environment reuse, technical and business checks, budget controls, and verifiable reports.
 
-当前版本：**0.2.0**，增加独立交互验收与程序防漏检查，使用 schema 1.1。安装示例与发行包均对应 v0.2.0；变更及升级注意事项见 [0.2.0 发布说明](docs/RELEASE-0.2.0.md)。本地执行工具依赖 **Python 3.10+ 标准库**，没有额外模型 API、数据库服务或第三方 Python 库。
+当前版本：**0.3.0**，增加风险样本矩阵、跨模块契约、逐步证据绑定与统一计量，使用 schema 1.2。安装示例与发行包均对应 v0.3.0；变更及升级注意事项见 [0.3.0 发布说明](docs/RELEASE-0.3.0.md)。本地执行工具依赖 **Python 3.10+ 标准库**，没有额外模型 API、数据库服务或第三方 Python 库。
 
-[下载 v0.2.0](https://github.com/zhongky1995/acceptance-testing-plugin/releases/tag/v0.2.0) · [自动验证](https://github.com/zhongky1995/acceptance-testing-plugin/actions/workflows/validate.yml) · [反馈问题](https://github.com/zhongky1995/acceptance-testing-plugin/issues)
+[下载 v0.3.0](https://github.com/zhongky1995/acceptance-testing-plugin/releases/tag/v0.3.0) · [自动验证](https://github.com/zhongky1995/acceptance-testing-plugin/actions/workflows/validate.yml) · [反馈问题](https://github.com/zhongky1995/acceptance-testing-plugin/issues)
 
 ## 使用
 
@@ -61,6 +61,19 @@ Evidence-based acceptance testing for AI-built products: risk-based planning, ex
 
 文件快照不能证明外部服务/模型/配置未变；观察者必须核验环境。费用和安装声明需要如实填写，执行工具不是网络/系统沙盒。宿主模型使用费无法取得时标未知，不能宣称总费用为零。
 
+## 0.3.0 的四项程序约束
+
+| 约束 | 程序负责什么 | 低成本路径 |
+| --- | --- | --- |
+| 风险与样本 | 五类适用性不能省略，适用的边界/异常样本必须有必需用例；同内容换编号不增加覆盖 | 复用本地输入，不要求组合穷举 |
+| 跨模块契约 | 对同一输入核对真实生产方与消费方；合法输出被下游拒绝必失败 | 小型项目适配器，优先录制响应或离线样本 |
+| 逐步证据 | 预期绑定冻结任务和动作，每个点、每个样本都有原始位置；错用其他步骤不能放行 | 共用真实轨迹文件，明确各点定位 |
+| 结论与计量 | 分 single_run / representative / sustained；计入失败请求，未知费用保留上界和缺口，观察窗口不接受自报零耗时覆盖 | 默认本次检查，不自动追加付费或持续测试 |
+
+完整字段、取证模板和升级办法见 [风险与证据协议](plugins/acceptance-testing/references/assurance.md)。风险判断仍需人或 Agent 阅读项目依据，程序不能自动穷尽需求或证明截图语义。代表性结论只覆盖声明的样本矩阵，持续观察只覆盖声明的次数和窗口。
+
+新产品验收要求 representative 或 sustained；single_run 即使已定义检查全部通过，也不会得到 product_accepted=true。本地小修仍可 focused + single_run，无须为了完整验收安装大量依赖。
+
 ## 不同 Agent 如何避免漏项
 
 程序从计划推导必要检查点，不接受一个“已完成”标记代替：只列后端测试、将必要交互改成可选、遗漏任务步骤/适用状态，都无法满足 product 门禁。界面文件/前端依赖会触发需要核对的线索；未发现线索不证明没有前端。
@@ -75,7 +88,7 @@ python3 plugins/acceptance-testing/scripts/qa.py gate --session-dir /实际验�
 
 退出 0 才表示本轮产品验收门禁满足。程序能核验流程和证据结构，不能独立证明图片语义、用户身份或 Agent 声明真实；Agent 走查不能替代真实用户观察。外部系统绕过 gate 或同权限修改整个工具不在此本地插件的约束范围内。
 
-旧 schema 1.0 档案保留为历史；新版可解释历史但不能沿用旧协议执行或取得新版整体通过，应新建轮次补齐本轮证据。
+旧 schema 1.0/1.1 档案保留为历史；新版可解释历史但不能沿用旧协议执行或取得新版整体通过，应新建轮次补齐本轮证据。
 
 ## 安装与更新
 
@@ -84,7 +97,7 @@ python3 plugins/acceptance-testing/scripts/qa.py gate --session-dir /实际验�
 在支持插件命令的 Codex 中安装固定发行版本：
 
 ```sh
-codex plugin marketplace add zhongky1995/acceptance-testing-plugin --ref v0.2.0
+codex plugin marketplace add zhongky1995/acceptance-testing-plugin --ref v0.3.0
 codex plugin add acceptance-testing@acceptance-testing-local
 ```
 
@@ -92,12 +105,12 @@ codex plugin add acceptance-testing@acceptance-testing-local
 
 命令以当前客户端帮助为准；终端里的旧版 Codex 可能没有插件命令，桌面应用随附版本可能不同。可先检查 `codex plugin --help`，再选择支持插件的客户端。
 
-也可下载发行页的 `acceptance-testing-marketplace-0.2.0.zip`，解压到自选位置，用解压目录添加本地来源，然后安装同名插件。克隆整个仓库后也可以这样安装：
+也可下载发行页的 `acceptance-testing-marketplace-0.3.0.zip`，解压到自选位置，用解压目录添加本地来源，然后安装同名插件。克隆整个仓库后也可以这样安装：
 
 ```sh
 git clone https://github.com/zhongky1995/acceptance-testing-plugin.git
 cd acceptance-testing-plugin
-git checkout v0.2.0
+git checkout v0.3.0
 codex plugin marketplace add .
 codex plugin add acceptance-testing@acceptance-testing-local
 ```
@@ -108,7 +121,7 @@ codex plugin add acceptance-testing@acceptance-testing-local
 
 更新时按客户端流程更新来源和插件；需要固定版本时使用发行标签。不要仅替换部分脚本，也不要覆盖目标项目的验收档案。
 
-从 0.1.x 升级：先保留原验收档案，再将来源切换到 v0.2.0 并更新插件。新验收需建立 schema 1.1 轮次；旧 schema 1.0 仅可生成历史报告，其通过结果不能自动升级为新版整体验收通过。
+从 0.1.x / 0.2.x 升级：先保留原验收档案，再将来源切换到 v0.3.0 并更新插件。新验收需建立 schema 1.2 轮次；旧 schema 1.0/1.1 仅可生成历史报告，其通过结果不能自动升级为新版整体验收通过。
 
 ## 报告
 
@@ -127,11 +140,12 @@ codex plugin add acceptance-testing@acceptance-testing-local
 ```text
 python3 -m unittest discover -s plugins/acceptance-testing/tests -v
 python3 plugins/acceptance-testing/scripts/demo.py --output dist/demo-new
+python3 plugins/acceptance-testing/scripts/contract_demo.py --output dist/contract-demo-new
 python3 scripts/package.py
 ```
 
 演示只修复隔离样例，保留缺陷前后的两轮报告，不修改真实用户项目。独立验证路径受用户模型与成本规则约束。
 
-演示应输出「初轮：failed；修复后新轮：passed」，报告位于指定输出目录的 before/after 子目录。输出目录需尚不存在，避免覆盖历史证据。样例故意含本人审批缺陷，仅用于验证插件。
+两种演示都应先 failed、修复后新轮 passed；契约演示用三个离线输入发现两端数量限制不一致。审批演示应输出「初轮：failed；修复后新轮：passed」，报告位于指定输出目录的 before/after 子目录。输出目录需尚不存在，避免覆盖历史证据。样例故意含本人审批缺陷，仅用于验证插件。
 
 贡献方式见 [CONTRIBUTING.md](CONTRIBUTING.md)。本项目采用 [MIT 许可证](LICENSE)。

@@ -20,9 +20,12 @@ check 在宿主原生操作前核对单用例前置、预算、尝试上限，�
 
 run/record/report 退出码：0 本轮门禁满足；1 本轮门禁失败；2 受阻或证据不足。分段执行期间 2 很正常：有尚未执行的必需用例，继续独立用例，不将其当脚本崩溃。执行用例内容不受报告退出码控制，参考 session 中各项真实状态。
 
+
+新版强制的 assurance、样本回执、冻结断言、逐样本轨迹及 usage 字段见 [风险与证据协议](assurance.md)。下方旧字段示意不能独立作为完整提交；实际取证从 check 返回的模板填写。
+
 ## plan.json
 
-新方案 schema_version 为 1.1，必须填写 [acceptance 合同](acceptance-protocol.md)。旧 1.0 仅支持历史报告，新轮不能降级执行。其余字段格式：
+新方案 schema_version 为 1.2，必须填写 [acceptance 合同](acceptance-protocol.md)。旧 1.0/1.1 仅支持历史报告，新轮不能降级执行。其余字段格式：
 
 - project_root：存在的项目绝对路径；goal：本轮任务。
 - scenario：local-iteration / third-party / target-delivery。

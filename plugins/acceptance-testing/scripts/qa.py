@@ -3,6 +3,7 @@
 import argparse
 import json
 import sys
+from qa_policy import template as assurance_template
 from pathlib import Path
 from qa_contracts import validate
 from qa_report import report_session
@@ -60,8 +61,8 @@ def main(argv=None):
                         "environment": {"local_runtime": sys.version.split()[0], "host": "unknown",
                                         "browser": "unknown", "computer_use": "unknown"},
                         "limits": {"execution_seconds": 600, "max_attempts_per_case": 2,
-                                   "max_external_cost": 0, "currency": "CNY"},
-                        "allow_install": False, "requirements": [], "cases": [], "feedback": [], "acceptance": template(args.scope)}
+                                   "max_external_cost": 0, "max_external_calls": 0, "max_external_tokens": 0, "currency": "CNY"},
+                        "allow_install": False, "requirements": [], "cases": [], "feedback": [], "acceptance": template(args.scope), "assurance": assurance_template()}
                 save(directory / "plan.json", plan)
             print(json.dumps({"inventory": str(directory / "inventory.json"), "snapshot": inventory["snapshot"],
                               "note": "发现完成；模板预算是起点，可调整。未运行项目、安装依赖或执行测试。"}, ensure_ascii=False))
@@ -88,12 +89,12 @@ def main(argv=None):
             else:
                 record(args.plan, args.session_dir, args.observation)
             report = report_session(args.session_dir)
-            print(json.dumps({"gate": report["gate"], "scope": report["acceptance"]["scope"], "product_accepted": report["product_accepted"], "counts": report["counts"],
+            print(json.dumps({"gate": report["gate"], "scope": report["acceptance"]["scope"], "product_accepted": report["product_accepted"], "claim": report["assurance"]["claim"], "counts": report["counts"],
                               "report": str(Path(args.session_dir).resolve() / "report.md")}, ensure_ascii=False))
             return {"passed": 0, "failed": 1, "inconclusive": 2}[report["gate"]]
         else:
             report = report_session(args.session_dir)
-            print(json.dumps({"gate": report["gate"], "scope": report["acceptance"]["scope"], "product_accepted": report["product_accepted"],
+            print(json.dumps({"gate": report["gate"], "scope": report["acceptance"]["scope"], "product_accepted": report["product_accepted"], "claim": report["assurance"]["claim"],
                               "gaps": report["gaps"], "acceptance": report["acceptance"], "dimensions": report["dimensions"]}, ensure_ascii=False))
             if args.action == "gate" and args.scope == "product" and not report["product_accepted"]:
                 return 1 if report["gate"] == "failed" else 2

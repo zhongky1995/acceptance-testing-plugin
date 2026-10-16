@@ -168,7 +168,10 @@ def readiness(plan, snapshot=None):
                 obligations.append(item)
                 if not cases:
                     gap(f"{jid or '本轮'}/{layer}/{point}：缺少范围内的必需用例", layer)
-    return {"scope": policy["scope"], "reason": policy["reason"], "sources": policy["sources"],
+    from qa_policy import coverage
+    assurance = coverage(plan)
+    gaps.extend(assurance["gaps"])
+    return {"assurance": assurance, "scope": policy["scope"], "reason": policy["reason"], "sources": policy["sources"],
             "surfaces": policy["surfaces"], "layers": policy["layers"], "obligations": obligations,
             "exceptions": exceptions, "gaps": gaps, "layer_gaps": layer_gaps}
 
@@ -188,9 +191,10 @@ def baseline_blocker(plan, case, statuses):
 def observation_issues(plan, case, payload):
     """Validate point-level observations, not the truth of their semantic judgment."""
     item = assessment(case)
-    if item["layer"] == "implementation" or payload.get("status") in {"blocked", "skipped"}:
+    if (item["layer"] == "implementation" and plan["schema_version"] != "1.2") or payload.get("status") in {"blocked", "skipped"}:
         return []
-    issues = []
+    from qa_policy import binding_issues
+    issues = binding_issues(plan, case, payload)
     method, actor = payload.get("method"), payload.get("actor_kind")
     if method not in METHODS or actor not in {"agent", "human"}:
         issues.append("需要真实观察方法与执行者类型")

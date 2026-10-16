@@ -8,7 +8,7 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-SCHEMA_VERSION = "1.1"
+SCHEMA_VERSION = "1.2"
 EXCLUDED = {".git", ".acceptance", ".venv", "venv", "node_modules", "__pycache__",
             ".pytest_cache", ".mypy_cache", ".ruff_cache", "dist", "build", "coverage",
             ".next", ".nuxt", "target", ".DS_Store"}

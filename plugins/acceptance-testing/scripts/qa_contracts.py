@@ -4,10 +4,12 @@ import re
 from pathlib import Path
 from qa_store import QAError, SCHEMA_VERSION
 from qa_acceptance import validate_acceptance
+from qa_policy import validate_policy
+from qa_ledger import validate_limits
 
 SCENARIOS = {"local-iteration", "third-party", "target-delivery"}
 DIMENSIONS = {"functional", "reliability", "environment", "delivery", "cost", "evidence"}
-ADAPTERS = {"exit", "junit", "playwright", "native"}
+ADAPTERS = {"exit", "junit", "playwright", "native", "contract"}
 STATES = {"passed", "failed", "blocked", "skipped", "not_run", "flaky"}
 
 
@@ -27,7 +29,7 @@ def identifier(value):
 
 def validate(plan):
     need(isinstance(plan, dict), "方案必须是对象")
-    need(plan.get("schema_version") in {"1.0", SCHEMA_VERSION}, "不支持的方案版本")
+    need(plan.get("schema_version") in {"1.0", "1.1", SCHEMA_VERSION}, "不支持的方案版本")
     need(plan.get("scenario") in SCENARIOS, "未知场景")
     root = Path(plan.get("project_root", ""))
     need(root.is_absolute() and root.is_dir(), "project_root 必须是存在的绝对目录")
@@ -108,4 +110,6 @@ def validate(plan):
     for node in graph:
         visit(node)
     validate_acceptance(plan)
+    validate_policy(plan)
+    validate_limits(plan)
     return plan

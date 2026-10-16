@@ -2,7 +2,7 @@
 
 七个按需技能与基于证据的验收执行工具，面向通过 AI 开发产品的负责人。默认复用现有环境，先确定本轮标准和预算，再执行必要测试与生成报告。
 
-当前版本 **0.2.0**：[发布说明与下载](https://github.com/zhongky1995/acceptance-testing-plugin/releases/tag/v0.2.0)。从 0.1.x 升级时保留已有档案；新验收使用 schema 1.1，旧轮次仅用于历史复核。
+当前版本 **0.3.0**：[发布说明与下载](https://github.com/zhongky1995/acceptance-testing-plugin/releases/tag/v0.3.0)。从 0.1.x / 0.2.x 升级时保留已有档案；新验收使用 schema 1.2，旧轮次仅用于历史复核。
 
 业务检查区分定义/标准依据、实现符合性和真实业务效果，按[业务分析与校验](references/business-validation.md)处理多角色价值、AI 内容及反馈归属。必要检查进入现有门禁，程序不自动判断语义或商业价值。
 
@@ -20,4 +20,6 @@
 
 本插件采用 [MIT 许可证](LICENSE)。
 
-0.2.0 使用 schema 1.1，把实现、需求适配与交互分开计算。readiness 自动列缺口；观察先 check 再 record；完整产品门禁用 gate。局部 focused 检查不会获得整体通过。旧档案只做历史解释，不覆盖原记录。详见 [程序验收协议](references/acceptance-protocol.md)。
+0.3.0 使用 schema 1.2，把实现、需求适配与交互分开计算。readiness 自动列缺口；观察先 check 再 record；完整产品门禁用 gate。局部 focused 检查不会获得整体通过。旧档案只做历史解释，不覆盖原记录。详见 [程序验收协议](references/acceptance-protocol.md)。
+
+0.3.0 增加程序强制的五类风险适用矩阵、按内容去重的样本覆盖、真实双向契约适配器、冻结步骤及逐样本轨迹绑定、结论强度与请求/token/费用账本。默认本地离线，仍无额外依赖。详见 [风险与证据协议](references/assurance.md)。single_run 不获得产品验收通过；代表性与持续性也仅覆盖声明矩阵或窗口。
