@@ -2,7 +2,7 @@
 
 原始 session 与证据用于程序计算 report.json 和 report.md。模型在报告之外补充解释，不改写程序判定。
 
-schema 1.1 按 [程序验收协议](acceptance-protocol.md)增加三类结论、任务/步骤/适用状态覆盖和 check 记录复核。既有六维质量指标继续保留，与三类验收正交。focused 即便 gate=passed 也有 product_accepted=false；产品发布门禁调用 `qa.py gate --session-dir RUN`，不能只看某条命令的成功退出。
+schema 1.2 按 [程序验收协议](acceptance-protocol.md)增加三类结论、任务/步骤/适用状态覆盖和 check 记录复核。既有六维质量指标继续保留，与三类验收正交。focused 即便 gate=passed 也有 product_accepted=false；产品发布门禁调用 `qa.py gate --session-dir RUN`，不能只看某条命令的成功退出。
 
 ## 门禁优先级
 
@@ -25,3 +25,5 @@ schema 1.1 按 [程序验收协议](acceptance-protocol.md)增加三类结论、
 修复后新轮关联原问题与用例，原轮报告仍保留为历史；重复失败后通过记不稳定，不能抹掉。当前程序没有自动跨轮合并缺陷，代理在业务说明中链接相关档案。
 
 输出的 evidence 维度对应计划中显式证据测试；程序级证据一致性检查另在 gaps 展示，未设置该维度不能把它宣称为“完整审计通过”。
+
+风险与样本、契约、冻结逐点证据、结论强度和请求账本遵循 [风险与证据协议](assurance.md)。读取 report.assurance.claim 及 report.usage 的未知标记；不可把单次成功或已知部分费用扩大成稳定性或总成本结论。

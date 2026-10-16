@@ -18,3 +18,37 @@ def product_policy():
                           "patterns": [{"name": "显式保存及状态反馈", "decision": "adopt", "reason": "降低保存状态的不确定性", "source": "PRD.md:1"}],
                           "states": {key: {"status": "required"} for key in ["loading", "empty", "error", "interrupted", "permission"]}}],
             "surface_exclusions": []}
+
+
+def assurance_policy():
+    from qa_policy import FEATURES
+    return {"claim": "single_run", "reason": "离线协议内核回归，不推断业务可靠性", "sources": ["隔离测试约定"],
+            "features": {k: {"status": "not_applicable", "reason": "本用例只验证协议机制", "sources": ["隔离测试约定"]} for k in FEATURES},
+            "samples": [], "boundaries": []}
+
+
+def add_product_samples(plan, root):
+    from qa_store import file_hash
+    plan["assurance"] = assurance_policy()
+    plan["assurance"]["claim"] = "representative"
+    for sid, name in [("A", "PRD.md"), ("B", "index.html")]:
+        plan["assurance"]["samples"].append({"id": sid, "kind": "fixture", "path": name, "sha256": file_hash(root / name), "purpose": "协议回执测试数据；不代表实际浏览器执行", "factors": {}})
+    for case in plan["cases"]:
+        case["sample_ids"] = ["A", "B"]
+    command = plan["cases"][0]
+    receipts = [{"id": s["id"], "sha256": s["sha256"], "status": "passed"} for s in plan["assurance"]["samples"]]
+    command["executor"]["argv"][2] = "import json,sys;json.dump(" + repr({"tests": [{"name": "save", "status": "passed"}], "sample_results": receipts}) + ",open(sys.argv[1],'w'))"
+
+
+def bind_payload(plan, case, payload):
+    from qa_policy import bindings
+    payload["usage"] = {"requests": [], "reused_request_ids": []}
+    payload["sample_ids"] = case.get("sample_ids", [])
+    payload["assertions"] = [{**b, "actual": "synthetic protocol fixture", "passed": True, "evidence_indices": [0], "locator": "fixture:1", "trace_ids": [f"T{i}-{sid}" for sid in case.get("sample_ids", []) or ["none"]]} for i, b in enumerate(bindings(plan, case))]
+    samples = {s["id"]: s for s in plan["assurance"]["samples"]}
+    payload["sample_evidence"] = [{"id": sid, "sha256": samples[sid]["sha256"], "evidence_indices": [0], "locator": f"synthetic sample {sid}"} for sid in case.get("sample_ids", [])]
+    if "execution" in payload:
+        payload["execution"]["trace"] = [{"id": f"T{i}-{sid}", "sample_id": sid, "binding_id": b["binding_id"], "planned_action": b["planned_action"], "action": b["planned_action"], "visible_result": "synthetic fixture result", "evidence_indices": [0], "locator": "fixture:1"} for i, b in enumerate(bindings(plan, case)) for sid in case.get("sample_ids", []) or ["none"]]
+    payload["method"] = payload.get("method") or "analysis"
+    payload["actor_kind"] = payload.get("actor_kind") or "agent"
+    return payload

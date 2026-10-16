@@ -49,6 +49,12 @@ def parse(adapter, report_path, returncode):
                 states.append("failed" if tags & {"failure", "error"} else "skipped" if "skipped" in tags else "passed")
             return summarize(states, returncode if not declared_failure else 1)
         data = json.loads(path.read_text(encoding="utf-8"))
+        if adapter == "contract":
+            from contract_check import consistent
+            items = data.get("sample_results", [])
+            if not isinstance(items, list) or not items or any(not isinstance(r, dict) for r in items):
+                raise QAError("缺少逐样本双向契约结果")
+            return summarize(["passed" if consistent(r) else "failed" for r in items], returncode)
         if adapter == "native":
             items = data.get("tests", [])
             if not isinstance(items, list) or any(not isinstance(t, dict) or not t.get("name") for t in items):

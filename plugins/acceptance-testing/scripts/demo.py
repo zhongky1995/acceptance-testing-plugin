@@ -6,13 +6,14 @@ import sys
 from pathlib import Path
 from qa_report import report_session
 from qa_runtime import run
+from qa_policy import FEATURES
 from qa_store import save, scan
 
 
 def make_plan(project, directory):
     inventory = scan(project, [directory])
     save(directory / "inventory.json", inventory)
-    plan = {"schema_version": "1.1", "project_root": str(project), "scenario": "local-iteration",
+    plan = {"schema_version": "1.2", "project_root": str(project), "scenario": "local-iteration",
             "goal": "本地审批业务规则验收", "snapshot": inventory["snapshot"],
             "environment": {"python": sys.version.split()[0], "mode": "offline-local-fixture"},
             "limits": {"execution_seconds": 30, "max_attempts_per_case": 2, "max_external_cost": 0, "currency": "CNY"},
@@ -30,6 +31,9 @@ def make_plan(project, directory):
                                       "need_fit": {"status": "deferred", "reason": "样例只验证既有规则的实现", "sources": ["PRD.md:3-5"]},
                                       "interaction": {"status": "deferred", "reason": "该命令样例未执行浏览器", "sources": ["ARCHITECTURE.md"]}}},
             "feedback": []}
+    plan["assurance"] = {"claim": "single_run", "reason": "演示只检查离线审批规则", "sources": ["演示约定"],
+                         "features": {k: {"status": "not_applicable", "reason": "聚焦离线规则回归", "sources": ["演示约定"]} for k in FEATURES},
+                         "samples": [], "boundaries": []}
     save(directory / "plan.json", plan)
     return directory / "plan.json"
 

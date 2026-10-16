@@ -1,10 +1,13 @@
-# 程序验收协议 1.1
+# 程序验收协议 1.2
 
 Python 标准库 CLI 是所有 Agent 的共同入口。技能负责理解与取证；程序负责范围、关系、先行检查、记录完整性和放行判断。无需新增模型、MCP 服务或数据库。
 
+
+新版强制的 assurance、样本回执、冻结断言、逐样本轨迹及 usage 字段见 [风险与证据协议](assurance.md)。下方旧字段示意不能独立作为完整提交；实际取证从 check 返回的模板填写。
+
 ## 调用与接手
 
-1. `qa.py init --project PROJECT --session-dir RUN --goal GOAL` 生成 schema 1.1 空白方案。默认 scope=product；明确局部检查可加 `--scope focused`。两者都需填写真实范围理由与来源，模板不会自动确认标准。
+1. `qa.py init --project PROJECT --session-dir RUN --goal GOAL` 生成 schema 1.2 空白方案。默认 scope=product；明确局部检查可加 `--scope focused`。两者都需填写真实范围理由与来源，模板不会自动确认标准。
 2. 按本文填写 acceptance，并照常填写 requirements/cases。`qa.py validate --plan PLAN` 校验结构；`qa.py readiness --plan PLAN` 返回自动推导的 obligations、缺口和例外（缺口时退出 2）。未覆盖交互不阻断独立技术执行，但不能放行完整产品。
 3. `run` 执行命令；观察前 `check --plan PLAN --session-dir RUN --case ID`，取得 allowed、check_id、检查点和 observation_template。按真实执行补模板并通过 `record` 导入。
 4. `report --session-dir RUN` 重新核验证据、冻结计划和先行记录，输出分项结论。其他 Agent 接手相同 RUN 即可；无须依赖聊天记忆，不自动重跑已有用例。
@@ -101,4 +104,4 @@ report 再读取原始 observation 与先行记录，不只相信 session 的状
 
 ## 旧档案
 
-schema 1.0 可生成带限制的历史报告，不能在新版执行或获得新版整体通过。保留旧档案；新建 schema 1.1 轮次，复用需求资料但重新取得所需执行证据。不要修改旧 schema 字段或原冻结记录来假装完成升级。
+schema 1.0/1.1 可生成带限制的历史报告，不能在新版执行或获得新版整体通过。保留旧档案；新建 schema 1.2 轮次，复用需求资料但重新取得所需执行证据。不要修改旧 schema 字段或原冻结记录来假装完成升级。

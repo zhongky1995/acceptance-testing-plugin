@@ -2,8 +2,9 @@
 from collections import Counter
 from pathlib import Path
 from qa_contracts import DIMENSIONS, validate
-from qa_runtime import case_status, current_snapshot, totals, verify_evidence, verify_observation
+from qa_runtime import case_status, current_snapshot, totals, verify_evidence, verify_observation, verify_command
 from qa_acceptance import LAYERS, LAYER_LABELS, assessment, readiness
+from qa_policy import coverage as assurance_coverage
 from qa_store import QAError, SCHEMA_VERSION, digest, load, now, save
 
 LABELS = {"passed": "通过", "failed": "失败", "blocked": "受阻", "skipped": "跳过",
@@ -54,6 +55,7 @@ def evaluate(session, directory):
             for attempt in attempts:
                 if attempt.get("status") in {"passed", "failed", "flaky"}:
                     issues.extend(verify_observation(session, case, attempt, directory))
+                    issues.extend(verify_command(session, case, attempt, directory))
             if issues:
                 status = "blocked"
         if not fresh and status in {"passed", "failed", "flaky"}:
@@ -88,6 +90,15 @@ def evaluate(session, directory):
         gaps.append("实际执行时间超出约定预算")
     if used["external_cost_reserved"] > plan["limits"]["max_external_cost"] or used["external_cost_actual_known"] > plan["limits"]["max_external_cost"]:
         gaps.append("外部费用超出约定预算")
+    if plan["schema_version"] == "1.2":
+        if used["external_calls_reserved"] > plan["limits"].get("max_external_calls", 0):
+            gaps.append("外部请求数超出约定预算")
+        if used["external_tokens_reserved"] > plan["limits"].get("max_external_tokens", 0):
+            gaps.append("外部 token 超出约定预算")
+        if used["pending_checks"]:
+            gaps.append("存在已检查但未结算的观察，须导入实际结果或未执行说明")
+        if used["duplicate_requests"]:
+            gaps.append("请求账本重复，需核对复用来源")
     dimensions = {}
     for dimension in sorted(DIMENSIONS):
         scoped = [r for r in rows if r["dimension"] == dimension and r["status"] != "out_of_scope"]
@@ -126,13 +137,15 @@ def evaluate(session, directory):
         layer_results[layer] = state
     acceptance["results"] = layer_results
     acceptance["methods"] = sorted({a["method"] for row in rows for a in row["attempts"] if a.get("method")})
+    assurance = assurance_coverage(plan, {r["id"]: r["status"] for r in rows}, session["results"])
+    gaps.extend(g for g in assurance["gaps"] if g not in gaps)
     gate = "failed" if failures else "inconclusive" if gaps else "passed"
-    product_accepted = gate == "passed" and acceptance["scope"] == "product"
+    product_accepted = gate == "passed" and acceptance["scope"] == "product" and assurance["claim"] in {"representative", "sustained"}
     return {"schema_version": SCHEMA_VERSION, "generated_at": now(), "goal": plan["goal"], "scenario": plan["scenario"],
             "project_root": plan["project_root"], "environment": plan["environment"],
             "plan_hash": session["plan_hash"], "snapshot": snapshot, "fresh": fresh, "gate": gate,
             "blocking_failures": failures, "gaps": gaps, "dimensions": dimensions,
-            "acceptance": acceptance, "product_accepted": product_accepted,
+            "acceptance": acceptance, "assurance": assurance, "product_accepted": product_accepted,
             "counts": dict(Counter(r["status"] for r in rows)), "coverage": coverage, "cases": rows,
             "usage": used, "limits": plan["limits"], "notes": session.get("notes", []),
             "feedback": plan.get("feedback", [])}
@@ -157,6 +170,17 @@ def render(report, path):
               "", "## 自动推导的检查点", "", "| 任务 | 板块 | 检查点 | 用例 | 结论 |", "| --- | --- | --- | --- | --- |"]
     for item in acceptance["obligations"]:
         lines.append(f"| {cell(item['journey_id'] or '本轮')} | {LAYER_LABELS[item['layer']]} | {cell(item['checkpoint'])} | {', '.join(item['case_ids']) or '无'} | {LABELS[item['status']]} |")
+    assurance = report["assurance"]
+    lines += ["", "## 结论强度与样本", "", f"- 声明强度：{assurance['claim']}。single_run 只能说明本次检查，不能获得产品验收通过。",
+              "- representative：声明任务和风险矩阵下的代表性样本；sustained：另满足声明的次数及观察窗口。两者均不保证所有输入或未来表现。",
+              "", "| 风险 | 变体 | 用例 | 有覆盖 |", "| --- | --- | --- | --- |"]
+    for item in assurance.get("matrix", []):
+        lines.append(f"| {item['feature']} | {item['variant']} | {', '.join(item['case_ids'])} | {item['covered']} |")
+    for sample in assurance.get("samples", []):
+        lines.append(f"- 样本 {cell(sample['id'])}：{sample['kind']}；{cell(sample['purpose'])}；SHA256 `{sample['sha256']}`。")
+    for name, rule in assurance.get("features", {}).items():
+        if rule["status"] != "required":
+            lines.append(f"- 风险 {name}：{rule['status']}；{cell(rule.get('reason', '尚未判断'))}；来源 {cell(rule.get('sources', []))}。")
     lines += ["", "## 未评估与不适用依据", ""]
     if acceptance["scope"] == "focused":
         lines.append(f"- 限定范围：{cell(acceptance['reason'])}；来源：{cell('; '.join(acceptance['sources']))}。")
@@ -192,7 +216,13 @@ def render(report, path):
               f"- 外部费用占用上界：{used['external_cost_reserved']} {limits['currency']}；预算 {limits['max_external_cost']}。",
               f"- 已提供的实际外部费用：{used['external_cost_actual_known']}；完整性：{'未完整提供' if used['cost_actual_incomplete'] else '已提供/无费用声明'}。",
               "- 模型与宿主费用由宿主计量；本工具不直接调用模型，也不将未获得的费用数据估算为零。", "",
-              "## 方案反馈", ""]
+              ]
+    if "external_calls_actual" in used:
+        lines += [f"- 请求实际记录 {used['external_calls_actual']} 次；预算占用 {used['external_calls_reserved']} 次（失败也计量）；请求记录未完整：{used['calls_actual_incomplete']}。",
+                  f"- 已知 token {used['external_tokens_actual_known']}；预算占用 {used['external_tokens_reserved']}；未知：{used['tokens_actual_incomplete']}。",
+                  f"- 命令执行 {used['command_seconds']:.3f} 秒；观察窗口 {used['observation_window_seconds']:.3f} 秒（含操作和等待）。",
+                  f"- {used['host_overhead']}。"]
+    lines += ["", "## 方案反馈", ""]
     if report["feedback"]:
         for item in report["feedback"]:
             lines.append(f"- [{cell(item.get('kind', '待验证'))}] {cell(item.get('statement', ''))}；依据：{cell(item.get('evidence', '未提供'))}")

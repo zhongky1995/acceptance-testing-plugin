@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from acceptance_fixtures import focused_policy, product_policy
+from acceptance_fixtures import focused_policy, product_policy, add_product_samples, bind_payload
 from qa_acceptance import expected_points, readiness
 from qa_contracts import validate
 from qa_report import report_session
@@ -35,7 +35,7 @@ class AcceptanceTests(unittest.TestCase):
                    "executor": {"kind": "command", "argv": ["{python}", "-c", "import json,sys;json.dump({'tests':[{'name':'save','status':'passed'}]},open(sys.argv[1],'w'))", "{evidence_dir}/result.json"],
                                 "adapter": "native", "result_path": "{evidence_dir}/result.json", "timeout_seconds": 2,
                                 "external_calls": False, "external_cost_bound": 0, "installs": False}}
-        self.plan = {"schema_version": "1.1", "project_root": str(self.root), "scenario": "local-iteration", "goal": "验收协议隔离测试",
+        self.plan = {"schema_version": "1.2", "project_root": str(self.root), "scenario": "local-iteration", "goal": "验收协议隔离测试",
                      "snapshot": project_snapshot(self.root), "environment": {"host": "offline-test-fixture"},
                      "limits": {"execution_seconds": 60, "max_attempts_per_case": 2, "max_external_cost": 0, "currency": "CNY"},
                      "allow_install": False, "acceptance": product_policy(), "feedback": [],
@@ -46,6 +46,7 @@ class AcceptanceTests(unittest.TestCase):
             case.update({"id": cid, "title": layer, "executor": {"kind": "observation", "external_calls": False, "external_cost_bound": 0, "installs": False},
                          "assessment": {"layer": layer, "journey_id": "J1", "checkpoints": expected_points(layer, self.plan["acceptance"]["journeys"][0])}})
             self.plan["cases"].append(case)
+        add_product_samples(self.plan, self.root)
         save(self.plan_path, self.plan)
 
     def prepare(self, cid):
@@ -63,6 +64,7 @@ class AcceptanceTests(unittest.TestCase):
                                     for p in case["assessment"]["checkpoints"]],
                    "execution": {"surface": "gui", "entry": "/editor", "backend_bypass": False, "source_access": "implementation-informed", "assistance": [],
                                  "trace": [{"action": "fixture action", "visible_result": "fixture result", "evidence_indices": [0]}]}}
+        bind_payload(self.plan, case, payload)
         if prepare:
             result = self.prepare(cid)
             self.assertTrue(result["allowed"], result)
@@ -371,7 +373,7 @@ class AcceptanceTests(unittest.TestCase):
         result = self.cli("init", "--project", str(self.root), "--session-dir", str(directory), "--goal", "实际验收")
         self.assertEqual(result.returncode, 0, result.stderr)
         plan = load(directory / "plan.json")
-        self.assertEqual(plan["schema_version"], "1.1")
+        self.assertEqual(plan["schema_version"], "1.2")
         self.assertEqual(plan["acceptance"]["scope"], "product")
         self.assertEqual(plan["acceptance"]["sources"], [])
         self.assertEqual(plan["snapshot"]["ui_signals"], ["index.html"])

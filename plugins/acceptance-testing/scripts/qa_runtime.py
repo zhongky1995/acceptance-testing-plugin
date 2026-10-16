@@ -7,6 +7,9 @@ import subprocess
 import sys
 import time
 import uuid
+from datetime import datetime, timezone
+from qa_policy import bindings, coverage, result_issues
+from qa_ledger import totals as ledger_totals, usage_issues, usage_fields, prior_events
 from pathlib import Path
 from qa_adapters import parse
 from qa_contracts import need, number, validate
@@ -73,7 +76,9 @@ def case_status(attempts):
     return latest
 
 
-def totals(session):
+def totals(session, exclude_check=None):
+    if session["plan"]["schema_version"] == "1.2":
+        return ledger_totals(session, exclude_check)
     attempts = [a for entries in session["results"].values() for a in entries]
     return {"execution_seconds": sum(a.get("duration_seconds", 0) for a in attempts),
             "external_cost_reserved": sum(max(a.get("cost_reserved", 0), a.get("cost_actual") or 0) for a in attempts),
@@ -81,8 +86,15 @@ def totals(session):
             "cost_actual_incomplete": any(a.get("cost_reserved", 0) > 0 and a.get("cost_actual") is None for a in attempts)}
 
 
-def permitted(session, case, directory=None):
-    limits, used, executor = session["plan"]["limits"], totals(session), case["executor"]
+def permitted(session, case, directory=None, exclude_check=None):
+    limits, used, executor = session["plan"]["limits"], totals(session, exclude_check), case["executor"]
+    if session["plan"]["schema_version"] == "1.2":
+        if executor.get("external_calls") and coverage(session["plan"])["gaps"]:
+            return "外部调用前须补齐风险与样本方案"
+        if used["external_calls_reserved"] + executor.get("external_call_bound", 0) > limits.get("max_external_calls", 0):
+            return "外部请求数上界超过剩余预算"
+        if used["external_tokens_reserved"] + executor.get("external_token_bound", 0) > limits.get("max_external_tokens", 0):
+            return "外部 token 上界超过剩余预算"
     if executor.get("installs") and not session["plan"]["allow_install"]:
         return "本轮复用环境，未启用依赖安装"
     if used["execution_seconds"] >= limits["execution_seconds"]:
@@ -162,7 +174,7 @@ def stop_process(proc):
 def execute_command(case, session, directory, evidence_dir):
     executor, plan = case["executor"], session["plan"]
     substitutions = {"{python}": sys.executable, "{project_root}": plan["project_root"],
-                     "{evidence_dir}": str(evidence_dir)}
+                     "{evidence_dir}": str(evidence_dir), "{plugin_root}": str(Path(__file__).resolve().parent.parent)}
 
     def expand(text):
         for key, value in substitutions.items():
@@ -188,6 +200,11 @@ def execute_command(case, session, directory, evidence_dir):
         try:
             result = parse(executor["adapter"], result_path, code)
             result["returncode"] = code
+            if plan["schema_version"] == "1.2" and (case.get("sample_ids") or executor["adapter"] == "contract"):
+                data = load(result_path)
+                issues = result_issues(plan, case, data)
+                if issues and result["status"] != "failed":
+                    result.update(status="blocked", reason="；".join(issues))
         except QAError as exc:
             result = {"status": "failed" if code != 0 else "blocked", "reason": str(exc), "returncode": code}
     except subprocess.TimeoutExpired:
@@ -207,6 +224,21 @@ def execute_command(case, session, directory, evidence_dir):
             output.write_text(redact(output.read_text(encoding="utf-8", errors="replace")), encoding="utf-8")
     result.update({"duration_seconds": round(time.monotonic() - started, 6), "interrupted": interrupted,
                    "cost_reserved": executor.get("external_cost_bound", 0), "cost_actual": None})
+    if plan["schema_version"] == "1.2":
+        usage_path = evidence_dir / "usage.json"
+        payload = {"usage": {"requests": []}}
+        if usage_path.exists():
+            try:
+                payload = {"usage": load(usage_path)}
+            except QAError:
+                payload = {}
+        elif executor.get("external_calls"):
+            payload = {}
+        save(evidence_dir / "usage-receipt.json", payload)
+        issues = usage_issues(case, payload, prior_events(session))
+        result.update(usage_fields(case, payload))
+        if issues:
+            result.update(observed_status=result["status"], status="blocked", reason="；".join(issues))
     return result
 
 
@@ -238,7 +270,10 @@ def run(plan_path, directory, case_id=None, retry=False):
                 continue
             evidence_dir = directory / "evidence" / case["id"] / str(attempt["attempt"])
             evidence_dir.mkdir(parents=True, exist_ok=False)
-            attempt["cost_reserved"] = case["executor"].get("external_cost_bound", 0)
+            attempt.update({"cost_reserved": case["executor"].get("external_cost_bound", 0),
+                            "call_reserved": case["executor"].get("external_call_bound", 0),
+                            "token_reserved": case["executor"].get("external_token_bound", 0),
+                            "external_declared": case["executor"].get("external_calls", False)})
             attempt["time_reserved"] = min(case["executor"]["timeout_seconds"],
                                            plan["limits"]["execution_seconds"] - totals(session)["execution_seconds"])
             save(directory / "session.json", session)
@@ -274,7 +309,7 @@ def record(plan_path, directory, observation_path):
             number(payload["external_cost_actual"], "external_cost_actual")
         entries = session["results"].setdefault(case["id"], [])
         need(len(entries) < session["plan"]["limits"]["max_attempts_per_case"], "已达到记录/重试上限")
-        policy_issue = permitted(session, case, directory)
+        policy_issue = permitted(session, case, directory, payload.get("check_id"))
         assertions = payload.get("assertions", [])
         files = payload.get("evidence_files", [])
         if status in {"passed", "failed", "flaky"}:
@@ -291,6 +326,8 @@ def record(plan_path, directory, observation_path):
         receipt = session.get("checks", {}).get(check_id) if isinstance(check_id, str) else None
         if not valid_receipt(session, case["id"], receipt, len(entries) + 1, consumed=False):
             issues.append("缺少本次观察前的有效 check 记录，或记录已被使用")
+        if session["plan"]["schema_version"] == "1.2":
+            issues.extend(usage_issues(case, payload, prior_events(session)))
         if policy_issue:
             issues.insert(0, policy_issue)
         policy_issue = "；".join(issues)
@@ -315,6 +352,12 @@ def record(plan_path, directory, observation_path):
                         "snapshot_digest": payload["observed_snapshot"], "environment_hash": payload["environment_hash"],
                         "evidence": evidence_manifest(attempt_dir), "evidence_origin": "host_observation",
                         "check_id": check_id, "method": payload.get("method"), "actor_kind": payload.get("actor_kind")})
+        if session["plan"]["schema_version"] == "1.2":
+            entries[-1].update(usage_fields(case, payload))
+            if valid_receipt(session, case["id"], receipt, len(entries), consumed=False):
+                elapsed = max(0, (datetime.now(timezone.utc) - datetime.fromisoformat(receipt["created_at"])).total_seconds())
+                entries[-1].update(started_at=receipt["created_at"], duration_seconds=max(elapsed, payload["duration_seconds"]),
+                                   reported_duration_seconds=payload["duration_seconds"])
         if receipt and valid_receipt(session, case["id"], receipt, len(entries), consumed=False):
             receipt["consumed"] = True
         if policy_issue:
@@ -330,7 +373,8 @@ def check_case(plan_path, directory, case_id):
         case = next((c for c in session["plan"]["cases"] if c["id"] == case_id), None)
         need(case is not None and case["in_scope"], "用例不存在或不在本轮范围内")
         attempt = len(session["results"].get(case_id, [])) + 1
-        reason = "已达到尝试上限" if attempt > session["plan"]["limits"]["max_attempts_per_case"] else permitted(session, case, directory)
+        existing = next((key for key, value in session.get("checks", {}).items() if valid_receipt(session, case_id, value, attempt, False)), None)
+        reason = "已达到尝试上限" if attempt > session["plan"]["limits"]["max_attempts_per_case"] else permitted(session, case, directory, existing)
         result = {"allowed": reason is None, "reason": reason, "case_id": case_id,
                   "required_checkpoints": assessment(case)["checkpoints"], "note": "仅允许执行，不代表测试通过。"}
         if not reason and case["executor"]["kind"] == "observation":
@@ -340,7 +384,10 @@ def check_case(plan_path, directory, case_id):
                 check_id = uuid.uuid4().hex
                 checks[check_id] = {"case_id": case_id, "attempt": attempt, "plan_hash": session["plan_hash"],
                                     "snapshot": session["plan"]["snapshot"]["digest"], "environment_hash": digest(session["plan"]["environment"]),
-                                    "created_at": now(), "consumed": False}
+                                    "created_at": now(), "consumed": False,
+                                    "cost_reserved": case["executor"].get("external_cost_bound", 0),
+                                    "call_reserved": case["executor"].get("external_call_bound", 0),
+                                    "token_reserved": case["executor"].get("external_token_bound", 0)}
                 save(directory / "session.json", session)
             result["check_id"] = check_id
             result["observation_template"] = {"case_id": case_id, "check_id": check_id, "status": "blocked", "reason": "尚未实际观察",
@@ -351,6 +398,11 @@ def check_case(plan_path, directory, case_id):
             if assessment(case)["layer"] == "interaction":
                 result["observation_template"]["execution"] = {"surface": "", "entry": "", "backend_bypass": None,
                     "source_access": "", "assistance": [], "trace": []}
+            if session["plan"]["schema_version"] == "1.2":
+                t = result["observation_template"]
+                t.update(sample_ids=case.get("sample_ids", []), sample_evidence=[], usage={"requests": [], "reused_request_ids": []})
+                t["assertions"] = [{**b, "actual": "", "passed": False, "evidence_indices": [], "locator": "", "trace_ids": []}
+                                   for b in bindings(session["plan"], case)]
         return result
 
 
@@ -372,8 +424,34 @@ def verify_observation(session, case, attempt, directory):
         receipt = session.get("checks", {}).get(check_id) if isinstance(check_id, str) else None
         if not valid_receipt(session, case["id"], receipt, attempt["attempt"], consumed=True) or payload.get("check_id") != check_id:
             issues.append("观察前检查记录不完整或不匹配")
+        if session["plan"]["schema_version"] == "1.2":
+            issues.extend(usage_issues(case, payload))
+            if any(attempt.get(k) != v for k, v in usage_fields(case, payload).items()):
+                issues.append("用量账本与原始回执不一致")
+            elapsed = (datetime.fromisoformat(attempt["finished_at"]) - datetime.fromisoformat(receipt["created_at"])).total_seconds() if receipt else 0
+            if attempt.get("duration_seconds", 0) + 1 < max(elapsed, payload.get("duration_seconds", 0)):
+                issues.append("观察时长与程序记录窗口不一致")
         if payload.get("status") != attempt["status"]:
             issues.append("观察原始状态与执行记录不匹配")
         return issues
     except (QAError, TypeError, AttributeError):
         return ["无法核验结构化观察记录"]
+
+
+def verify_command(session, case, attempt, directory):
+    if session["plan"]["schema_version"] != "1.2" or case["executor"]["kind"] != "command":
+        return []
+    folder = Path(directory) / "evidence" / case["id"] / str(attempt["attempt"])
+    try:
+        payload = load(folder / "usage-receipt.json")
+        issues = usage_issues(case, payload)
+        if any(attempt.get(k) != v for k, v in usage_fields(case, payload).items()):
+            issues.append("命令用量与原始回执不一致")
+        if case.get("sample_ids") or case["executor"]["adapter"] == "contract":
+            result = case["executor"]["result_path"].replace("{evidence_dir}", str(folder))
+            issues.extend(result_issues(session["plan"], case, load(result), require_pass=attempt["status"] == "passed"))
+            if case["executor"]["adapter"] == "contract" and parse("contract", result, attempt.get("returncode", 0))["status"] != attempt["status"]:
+                issues.append("契约判断与原始双向结果不一致")
+        return issues
+    except (QAError, TypeError, KeyError, OSError):
+        return ["无法核验命令样本或用量回执"]
