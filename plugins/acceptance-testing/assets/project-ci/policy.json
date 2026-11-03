@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0",
+  "max_seconds": 480,
+  "product_session": ".acceptance/ci",
+  "groups": [
+    {
+      "id": "fast",
+      "trigger": "always",
+      "status": "required",
+      "reason": "每次提交运行项目已有的构建、静态或单元检查；请填写实际命令",
+      "sources": ["项目运行及测试说明"],
+      "paths": [],
+      "commands": []
+    },
+    {
+      "id": "integration",
+      "trigger": "changed",
+      "status": "required",
+      "reason": "服务、数据、接口、依赖和未知改动需要集成或契约回归；请按实际目录调整",
+      "sources": ["项目技术架构"],
+      "paths": ["src/**", "app/**", "server/**", "api/**", "backend/**", "db/**", "migrations/**", "tests/**", "package*.json", "*lock*", "requirements*.txt", "pyproject.toml"],
+      "commands": []
+    },
+    {
+      "id": "experience",
+      "trigger": "changed",
+      "status": "required",
+      "reason": "页面、样式、交互、业务约定变化需已有的界面或任务回归；无用户入口时写不适用依据",
+      "sources": ["项目产品与交互说明"],
+      "paths": ["frontend/**", "web/**", "ui/**", "src/**", "app/**", "public/**", "**/*.html", "**/*.css", "**/*.tsx", "**/*.jsx", "**/*.vue", "**/*.svelte", "docs/**", "*.md"],
+      "commands": []
+    },
+    {
+      "id": "delivery",
+      "trigger": "delivery",
+      "status": "required",
+      "reason": "手动交付检查：准备本轮完整验收证据后，由程序额外执行产品 gate",
+      "sources": ["本轮交付范围"],
+      "paths": [],
+      "commands": []
+    }
+  ]
+}

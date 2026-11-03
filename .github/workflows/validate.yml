@@ -33,5 +33,7 @@ jobs:
         run: python -m unittest discover -s plugins/acceptance-testing/tests -v
       - name: Verify defect detection and a new retest round
         run: python plugins/acceptance-testing/scripts/demo.py --output dist/demo-ci
+      - name: Verify risk-selected project CI template
+        run: python plugins/acceptance-testing/scripts/ci_demo.py --output dist/project-ci-demo
       - name: Validate and package plugin
         run: python scripts/package.py

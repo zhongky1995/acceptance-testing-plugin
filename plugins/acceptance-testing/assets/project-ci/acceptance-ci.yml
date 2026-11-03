@@ -1,0 +1,50 @@
+name: Project acceptance
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'full: all offline checks; delivery: also require a fresh product gate'
+        type: choice
+        options: [full, delivery]
+        default: full
+
+permissions:
+  contents: read
+
+concurrency:
+  group: acceptance-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  acceptance:
+    # Stable required check: don't filter the workflow or conditionally skip this job.
+    name: Acceptance CI
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.10'
+      # Add only the project's existing runtime/environment setup here, if needed.
+      # No secrets or paid service credentials are supplied by this template.
+      - name: Select risk and execute within budget
+        env:
+          CI_BASE: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
+          CI_PROFILE: ${{ inputs.profile || 'change' }}
+        run: python .acceptance-ci/ci.py run --profile "$CI_PROFILE"
+      - name: Save CI decision report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: acceptance-ci-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .acceptance/ci-selection.json
+          if-no-files-found: warn
+          retention-days: 7
