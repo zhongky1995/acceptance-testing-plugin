@@ -4,9 +4,9 @@
 
 Evidence-based acceptance testing for AI-built products: risk-based planning, existing-environment reuse, technical and business checks, budget controls, and verifiable reports.
 
-当前版本：**0.3.0**，增加风险样本矩阵、跨模块契约、逐步证据绑定与统一计量，使用 schema 1.2。安装示例与发行包均对应 v0.3.0；变更及升级注意事项见 [0.3.0 发布说明](docs/RELEASE-0.3.0.md)。本地执行工具依赖 **Python 3.10+ 标准库**，没有额外模型 API、数据库服务或第三方 Python 库。
+当前版本：**0.4.0**，增加通用项目 CI 接入模板与按风险执行器，启用仓库强制合并保护，使用 schema 1.2。安装示例与发行包均对应 v0.4.0；变更及升级注意事项见 [0.4.0 发布说明](docs/RELEASE-0.4.0.md)。本地执行工具依赖 **Python 3.10+ 标准库**，没有额外模型 API、数据库服务或第三方 Python 库。
 
-[下载 v0.3.0](https://github.com/zhongky1995/acceptance-testing-plugin/releases/tag/v0.3.0) · [自动验证](https://github.com/zhongky1995/acceptance-testing-plugin/actions/workflows/validate.yml) · [反馈问题](https://github.com/zhongky1995/acceptance-testing-plugin/issues)
+[下载 v0.4.0](https://github.com/zhongky1995/acceptance-testing-plugin/releases/tag/v0.4.0) · [自动验证](https://github.com/zhongky1995/acceptance-testing-plugin/actions/workflows/validate.yml) · [反馈问题](https://github.com/zhongky1995/acceptance-testing-plugin/issues)
 
 ## 使用
 
@@ -61,7 +61,7 @@ Evidence-based acceptance testing for AI-built products: risk-based planning, ex
 
 文件快照不能证明外部服务/模型/配置未变；观察者必须核验环境。费用和安装声明需要如实填写，执行工具不是网络/系统沙盒。宿主模型使用费无法取得时标未知，不能宣称总费用为零。
 
-## 0.3.0 的四项程序约束
+## 风险与证据的四项程序约束
 
 | 约束 | 程序负责什么 | 低成本路径 |
 | --- | --- | --- |
@@ -90,6 +90,29 @@ python3 plugins/acceptance-testing/scripts/qa.py gate --session-dir /实际验�
 
 旧 schema 1.0/1.1 档案保留为历史；新版可解释历史但不能沿用旧协议执行或取得新版整体通过，应新建轮次补齐本轮证据。
 
+## 接入项目 CI
+
+插件仓库已启用强制合并保护：Python 3.10、3.14 检查都通过、分支跟上主分支才能合并，管理员也受约束。
+
+给其他项目接入时，使用插件提供的模板：
+
+```sh
+python3 PLUGIN/scripts/qa_ci.py init --project PROJECT
+```
+
+已有 CI 可加 `--runner-only`，把运行步骤放入现有流程，复用环境和缓存。生成后填写项目实际测试命令与风险路径；空命令会阻断，不能直接当成接入完成。
+
+| 层级 | 什么时候跑 |
+| --- | --- |
+| 基础检查 | 每次提交：快速构建、单元、冒烟 |
+| 集成/契约 | 相关接口、数据、依赖等改动时 |
+| 界面/任务回归 | 页面、交互或业务约定改动时 |
+| 完整交付 | 手动启动，准备当前版本证据，再强制通过产品 gate |
+
+未知目录、无法取得比较基线或 CI 配置改动，会扩大自动覆盖。单机执行、累计时间预算、无自动重试；早期失败停止更深测试，不默认启动付费服务。固定检查名 **Acceptance CI**，需在目标仓库配置为必要检查。
+
+自动检查通过与完整产品验收分别报告。完整字段、已有 CI 接法、门禁和分支保护步骤见 [项目 CI 接入指南](plugins/acceptance-testing/references/ci-integration.md)。
+
 ## 安装与更新
 
 项目包含本地目录 `.agents/plugins/marketplace.json`，插件位于 `plugins/acceptance-testing/`，同时提供便携 manifest 与 Codex 兼容 manifest。
@@ -97,7 +120,7 @@ python3 plugins/acceptance-testing/scripts/qa.py gate --session-dir /实际验�
 在支持插件命令的 Codex 中安装固定发行版本：
 
 ```sh
-codex plugin marketplace add zhongky1995/acceptance-testing-plugin --ref v0.3.0
+codex plugin marketplace add zhongky1995/acceptance-testing-plugin --ref v0.4.0
 codex plugin add acceptance-testing@acceptance-testing-local
 ```
 
@@ -105,12 +128,12 @@ codex plugin add acceptance-testing@acceptance-testing-local
 
 命令以当前客户端帮助为准；终端里的旧版 Codex 可能没有插件命令，桌面应用随附版本可能不同。可先检查 `codex plugin --help`，再选择支持插件的客户端。
 
-也可下载发行页的 `acceptance-testing-marketplace-0.3.0.zip`，解压到自选位置，用解压目录添加本地来源，然后安装同名插件。克隆整个仓库后也可以这样安装：
+也可下载发行页的 `acceptance-testing-marketplace-0.4.0.zip`，解压到自选位置，用解压目录添加本地来源，然后安装同名插件。克隆整个仓库后也可以这样安装：
 
 ```sh
 git clone https://github.com/zhongky1995/acceptance-testing-plugin.git
 cd acceptance-testing-plugin
-git checkout v0.3.0
+git checkout v0.4.0
 codex plugin marketplace add .
 codex plugin add acceptance-testing@acceptance-testing-local
 ```
@@ -121,7 +144,9 @@ codex plugin add acceptance-testing@acceptance-testing-local
 
 更新时按客户端流程更新来源和插件；需要固定版本时使用发行标签。不要仅替换部分脚本，也不要覆盖目标项目的验收档案。
 
-从 0.1.x / 0.2.x 升级：先保留原验收档案，再将来源切换到 v0.3.0 并更新插件。新验收需建立 schema 1.2 轮次；旧 schema 1.0/1.1 仅可生成历史报告，其通过结果不能自动升级为新版整体验收通过。
+从 0.3.x 升级保持 schema 1.2，不改变已有验收标准；项目 CI 模板按接入指南单独审阅与提交。
+
+从 0.1.x / 0.2.x 升级：先保留原验收档案，再将来源切换到 v0.4.0 并更新插件。新验收需建立 schema 1.2 轮次；旧 schema 1.0/1.1 仅可生成历史报告，其通过结果不能自动升级为新版整体验收通过。
 
 ## 报告
 
@@ -141,6 +166,7 @@ codex plugin add acceptance-testing@acceptance-testing-local
 python3 -m unittest discover -s plugins/acceptance-testing/tests -v
 python3 plugins/acceptance-testing/scripts/demo.py --output dist/demo-new
 python3 plugins/acceptance-testing/scripts/contract_demo.py --output dist/contract-demo-new
+python3 plugins/acceptance-testing/scripts/ci_demo.py --output dist/ci-demo-new
 python3 scripts/package.py
 ```
 

@@ -61,3 +61,9 @@ readiness 自动推导必要覆盖；required/out-of-scope 声明不能替代这
 新增约束见 [风险与证据协议](../plugins/acceptance-testing/references/assurance.md)。只有本机 Python 标准库和项目已有适配命令，不增加常驻服务、数据库或模型调用。risk / sample / boundary / assertion / request 是轻量 JSON 记录；观察 check 在原锁内预留预算，record 保存原始事实，report 再核验结构和绑定。旧 1.0/1.1 只做历史解释。
 
 覆盖矩阵约束已声明方案，不能自动发现全部需求。契约适配器要调用真实两端，实现真实性仍依赖代码审查。账本不会监视网络，也不能计量宿主内部推理；不宣称防恶意篡改、统计可靠性或长期业务效果。
+
+## 0.4.0 项目 CI 接入
+
+`qa_ci.py` 提供可复制的 Python 标准库执行器，`assets/project-ci/` 提供 GitHub 工作流与风险配置。目标仓库提交同版验收内核副本，避免 CI 时动态下载插件；已有流水线可仅取执行器与配置。执行器从 Git 改动选择检查，基线不可用或未知路径则扩大，保持一个固定 CI 检查名称。交付模式额外强制调用原 qa.py 产品 gate，不引入另一套产品通过算法。
+
+验收 schema 仍为 1.2；CI 选择配置独立使用 1.0。脚本只校验已声明副作用，不是网络沙盒。分支保护属于 GitHub 仓库设置，不由插件自动迁移到其他项目。详情见 [接入协议](../plugins/acceptance-testing/references/ci-integration.md)。
