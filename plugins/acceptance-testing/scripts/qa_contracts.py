@@ -9,7 +9,7 @@ from qa_ledger import validate_limits
 
 SCENARIOS = {"local-iteration", "third-party", "target-delivery"}
 DIMENSIONS = {"functional", "reliability", "environment", "delivery", "cost", "evidence"}
-ADAPTERS = {"exit", "junit", "playwright", "native", "contract"}
+ADAPTERS = {"exit", "junit", "playwright", "native", "contract", "workflow"}
 STATES = {"passed", "failed", "blocked", "skipped", "not_run", "flaky"}
 
 
@@ -80,6 +80,9 @@ def validate(plan):
              "执行副作用声明必须是布尔值")
         if executor.get("external_calls"):
             need("external_cost_bound" in executor, "外部调用需要明确费用上界；未知费用先记录受阻")
+        if executor.get("adapter") == "workflow" or "workflow_expectation" in item:
+            need(plan["schema_version"] == "1.2" and executor["kind"] == "command" and executor.get("adapter") == "workflow",
+                 "流程预期需绑定 schema 1.2 的 workflow 命令")
         if executor["kind"] == "command":
             need(executor.get("adapter") in ADAPTERS, "未知适配器")
             argv = executor.get("argv")
