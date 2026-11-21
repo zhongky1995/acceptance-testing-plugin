@@ -12,6 +12,7 @@ from qa_policy import bindings, coverage, result_issues
 from qa_ledger import totals as ledger_totals, usage_issues, usage_fields, prior_events
 from pathlib import Path
 from qa_adapters import parse
+from qa_workflow import read_result as read_workflow_result
 from qa_contracts import need, number, validate
 from qa_acceptance import assessment, baseline_blocker, observation_issues
 from qa_store import QAError, SCHEMA_VERSION, digest, file_hash, load, now, project_snapshot, redact, save
@@ -198,15 +199,18 @@ def execute_command(case, session, directory, evidence_dir):
             resolved = Path(result_path).resolve()
             need(resolved.is_relative_to(evidence_dir.resolve()), "结果文件越出本次证据目录")
         try:
-            result = parse(executor["adapter"], result_path, code)
+            if executor["adapter"] == "workflow":
+                result = read_workflow_result(plan, case, result_path, code, evidence_dir)
+            else:
+                result = parse(executor["adapter"], result_path, code)
+                if plan["schema_version"] == "1.2" and (case.get("sample_ids") or executor["adapter"] == "contract"):
+                    issues = result_issues(plan, case, load(result_path))
+                    if issues and result["status"] != "failed":
+                        result.update(status="blocked", reason="；".join(issues))
             result["returncode"] = code
-            if plan["schema_version"] == "1.2" and (case.get("sample_ids") or executor["adapter"] == "contract"):
-                data = load(result_path)
-                issues = result_issues(plan, case, data)
-                if issues and result["status"] != "failed":
-                    result.update(status="blocked", reason="；".join(issues))
         except QAError as exc:
-            result = {"status": "failed" if code != 0 else "blocked", "reason": str(exc), "returncode": code}
+            result = {"status": "failed" if code != 0 and executor["adapter"] != "workflow" else "blocked",
+                      "reason": str(exc), "returncode": code}
     except subprocess.TimeoutExpired:
         stop_process(proc)
         result = {"status": "blocked", "reason": "执行超时，需区分产品、环境或预算原因", "returncode": proc.returncode}
@@ -449,6 +453,11 @@ def verify_command(session, case, attempt, directory):
             issues.append("命令用量与原始回执不一致")
         if case.get("sample_ids") or case["executor"]["adapter"] == "contract":
             result = case["executor"]["result_path"].replace("{evidence_dir}", str(folder))
+            if case["executor"]["adapter"] == "workflow":
+                computed = read_workflow_result(session["plan"], case, result, attempt.get("returncode"), folder)
+                if computed["status"] != attempt["status"]:
+                    issues.append("流程判断与本次原始回执不一致")
+                return issues
             issues.extend(result_issues(session["plan"], case, load(result), require_pass=attempt["status"] == "passed"))
             if case["executor"]["adapter"] == "contract" and parse("contract", result, attempt.get("returncode", 0))["status"] != attempt["status"]:
                 issues.append("契约判断与原始双向结果不一致")

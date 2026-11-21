@@ -7,6 +7,7 @@
 - `junit`：真实 testcase 节点；failure/error 判失败，skipped 判跳过，零节点受阻。用于已有 pytest/Jest/Vitest/Go 等能产生 JUnit 的配置，本插件不自带这些框架或报告扩展。
 - `playwright`：官方 JSON suites/specs/tests 的最终 expected/unexpected/flaky/skipped；expectedStatus 非 passed 的预期失败不作为稳定业务通过。全局 errors 判失败，零测试受阻。
 - `native`：`{"tests":[{"name":"业务断言名","status":"passed"}]}`；状态可 passed/failed/skipped/flaky，非空列表。实际断言脚本可记录 expected/actual 等额外内容。不能人工编造测试结果再称自动测试通过。
+- `workflow` 比对单个冻结样本的故障归属、全部对象状态、下一步实际输入和副作用次数；每个适用阶段可独立执行。[决策表与回执格式](workflow-recovery.md)
 - `exit`：构建、类型、明确静态检查的退出码。零用例检查不适用于该类命令，所以不得用于未解析的测试套件。
 
 结构化结果只能写到本次 `{evidence_dir}`。例如已有 pytest 支持 JUnit 时：`["{python}","-m","pytest","--junitxml={evidence_dir}/result.xml"]`。若项目 pytest 不存在，不自动安装。

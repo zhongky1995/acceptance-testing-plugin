@@ -2,6 +2,7 @@
 from datetime import datetime
 from pathlib import Path
 from qa_acceptance import assessment
+from qa_workflow import validate_transition
 from qa_store import QAError, digest, file_hash
 
 FEATURES = {
@@ -62,7 +63,10 @@ def validate_policy(plan):
         refs = c.get("sample_ids", [])
         need(isinstance(refs, list) and all(text(s) for s in refs) and len(refs) == len(set(refs)) and set(refs) <= ids, "用例样本引用无效")
         if refs and c["executor"]["kind"] == "command":
-            need(c["executor"]["adapter"] in {"native", "contract"}, "样本用例需 native/contract 结果逐项回执")
+            need(c["executor"]["adapter"] in {"native", "contract", "workflow"}, "样本用例需结构化逐项回执")
+        if c["executor"].get("adapter") == "workflow":
+            need(len(refs) == 1, "每条流程注入用例绑定一个冻结样本")
+            validate_transition(c.get("workflow_expectation"), expectation=True)
     boundaries = p.get("boundaries")
     need(isinstance(boundaries, list), "boundaries 必须是列表")
     bids = set()

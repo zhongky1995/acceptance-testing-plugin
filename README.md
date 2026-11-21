@@ -4,7 +4,9 @@
 
 Evidence-based acceptance testing for AI-built products: risk-based planning, existing-environment reuse, technical and business checks, budget controls, and verifiable reports.
 
-当前版本：**0.4.0**，增加通用项目 CI 接入模板与按风险执行器，启用仓库强制合并保护，使用 schema 1.2。安装示例与发行包均对应 v0.4.0；变更及升级注意事项见 [0.4.0 发布说明](docs/RELEASE-0.4.0.md)。本地执行工具依赖 **Python 3.10+ 标准库**，没有额外模型 API、数据库服务或第三方 Python 库。
+本地开发版 **0.5.0** 增加[多阶段故障与续办验收](plugins/acceptance-testing/references/workflow-recovery.md)，沿用 schema 1.2。
+
+已发布版本：**0.4.0**，增加通用项目 CI 接入模板与按风险执行器，启用仓库强制合并保护，使用 schema 1.2。安装示例与发行包均对应 v0.4.0；变更及升级注意事项见 [0.4.0 发布说明](docs/RELEASE-0.4.0.md)。本地执行工具依赖 **Python 3.10+ 标准库**，没有额外模型 API、数据库服务或第三方 Python 库。
 
 [下载 v0.4.0](https://github.com/zhongky1995/acceptance-testing-plugin/releases/tag/v0.4.0) · [自动验证](https://github.com/zhongky1995/acceptance-testing-plugin/actions/workflows/validate.yml) · [反馈问题](https://github.com/zhongky1995/acceptance-testing-plugin/issues)
 
